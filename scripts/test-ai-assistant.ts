@@ -2,9 +2,10 @@ import { and, eq, gte } from "drizzle-orm";
 
 import { aiRequests, aiSettings, chartAccounts, fiscalYears, users } from "@/db/schema";
 import { createSystemDraft, postJournal } from "@/modules/accounting/journal-service";
+import { incomeStatement } from "@/modules/accounting/report-service";
 import { createFiscalYear } from "@/modules/organization/fiscal-service";
 import { findExportEntry } from "@/modules/reporting/export-catalog";
-import { askReport } from "@/modules/ai/assistant-service";
+import { askAnalysis, askReport } from "@/modules/ai/assistant-service";
 import { AI_SETTINGS_ID, type Tx } from "@/modules/ai/_refs";
 import { AiError, type AiErrorKind, type AiProvider, type AiRequest } from "@/modules/ai/provider";
 import { buildSummaryData, redactRow } from "@/modules/ai/redact";
@@ -40,11 +41,14 @@ const FROM = "2040-01-01";
 const TO = "2040-12-31";
 
 type FakeIntent = { reportKey: string; query?: Record<string, unknown> };
+type FakeAnalysisIntent = { analysisKey: string; params?: Record<string, unknown> };
 
 /** Provider uji deterministik; mencatat setiap permintaan (untuk assertion prompt). */
-function makeFakeProvider(opts: { intent?: FakeIntent; failKind?: AiErrorKind } = {}): AiProvider & {
-  calls: AiRequest[];
-} {
+function makeFakeProvider(opts: {
+  intent?: FakeIntent;
+  analysisIntent?: FakeAnalysisIntent;
+  failKind?: AiErrorKind;
+} = {}): AiProvider & { calls: AiRequest[] } {
   const calls: AiRequest[] = [];
   const provider: AiProvider & { calls: AiRequest[] } = {
     name: "fake-test",
@@ -53,12 +57,18 @@ function makeFakeProvider(opts: { intent?: FakeIntent; failKind?: AiErrorKind } 
       calls.push(request);
       if (opts.failKind) throw new AiError(opts.failKind, "galat terencana dari provider fake");
       const text = request.json
-        ? JSON.stringify({
-            reportKey: opts.intent?.reportKey ?? "trial-balance",
-            query: opts.intent?.query ?? { from: FROM, to: TO },
-            rationale: "pilihan fake deterministik",
-          })
-        : "Ringkasan: tiga akun bermutasi pada periode ini (angka dari service).";
+        ? opts.analysisIntent
+          ? JSON.stringify({
+              analysisKey: opts.analysisIntent.analysisKey,
+              params: opts.analysisIntent.params ?? {},
+              rationale: "pilihan analisis fake deterministik",
+            })
+          : JSON.stringify({
+              reportKey: opts.intent?.reportKey ?? "trial-balance",
+              query: opts.intent?.query ?? { from: FROM, to: TO },
+              rationale: "pilihan fake deterministik",
+            })
+        : "Ringkasan: angka sudah dihitung service deterministik; ini narasi contoh.";
       return { text, inputTokens: 12, outputTokens: 6, model: "fake-test-model" };
     },
   };
@@ -282,6 +292,121 @@ async function main() {
       });
       assert("ringkasan laporan personal tak memuat nama", !JSON.stringify(summary).includes("Budi Sentosa"));
       assert("ringkasan tetap memuat angka", JSON.stringify(summary).includes("5000000.00"));
+
+      /* =================== Tahap 9D: asisten analisis =================== */
+      // Fase H sengaja menyisakan rateLimitPerMinute=2; kembalikan kepala kuota +
+      // kosongkan jejak panggilan agar fase 9D/9E (guardedPreflight terbukti di C/D/H)
+      // tidak kena 429. Perilaku kuota sudah ditunjukkan di (H).
+      await tx.delete(aiRequests).where(eq(aiRequests.userId, actorA.userId));
+      await setSettings(tx, { rateLimitPerMinute: 100, dailyRequestLimit: 1000 });
+
+      /* (J) Jalur penuh analisis: intent -> hitung deterministik -> jelaskan */
+      const fakeJ = makeFakeProvider({ analysisIntent: { analysisKey: "income-trend", params: { from: FROM, to: TO } } });
+      const resJ = await askAnalysis(
+        actorA,
+        { question: "Bagaimana tren laba rugi selama 2040?" },
+        { provider: fakeJ, tx },
+      );
+      assert("analisis menghasilkan penjelasan", typeof resJ.answer === "string" && resJ.answer.length > 0);
+      assert("analysisKey = income-trend", resJ.analysis.key === "income-trend");
+      assert("sumber angka analisis = service deterministik", resJ.analysis.source === "deterministic service");
+      assert("12 periode ter-enumerate (FY 2040)", resJ.metrics.periodCount === 12);
+      // Angka harus cocok dengan incomeStatement langsung (sumber kebenaran yang sama).
+      const incDirect = await incomeStatement(actorA, { from: FROM, to: TO }, tx);
+      assert("netIncome service = 3.800.000 (5jt pendapatan - 1,2jt beban)", incDirect.netIncome === "3800000.00");
+      assert("totalNet analisis = netIncome service", resJ.metrics.totalNet === incDirect.netIncome);
+      assert("dua panggilan provider (klasifikasi + penjelasan)", fakeJ.calls.length === 2);
+      assert("prompt klasifikasi analisis memuat katalog", (fakeJ.calls[0]?.prompt ?? "").includes("income-trend"));
+      const jLog = await tx
+        .select({ status: aiRequests.status, feature: aiRequests.feature, reportKey: aiRequests.reportKey })
+        .from(aiRequests)
+        .where(and(eq(aiRequests.userId, actorA.userId), eq(aiRequests.feature, "analysis.assistant")));
+      assert(
+        "log analysis.assistant tercatat 'ok' dgn reportKey income-trend",
+        jLog.some((r) => r.status === "ok" && r.reportKey === "income-trend"),
+      );
+
+      /* (K) Zero-safe: analisis posisi kini tanpa fixture => tak crash, metrik valid */
+      const resK1 = await askAnalysis(
+        actorA,
+        { question: "Bagaimana risiko umur piutang?" },
+        { provider: makeFakeProvider({ analysisIntent: { analysisKey: "ar-aging-risk", params: {} } }), tx },
+      );
+      assert("ar-aging-risk: pastDueAmount string desimal", typeof resK1.metrics.pastDueAmount === "string");
+      assert("ar-aging-risk: elevatedRisk yes/no", resK1.metrics.elevatedRisk === "yes" || resK1.metrics.elevatedRisk === "no");
+      assert("ar-aging-risk: flags berupa array", Array.isArray(resK1.flags));
+      const resK2 = await askAnalysis(
+        actorA,
+        { question: "Berapa risiko kehabisan stok?" },
+        { provider: makeFakeProvider({ analysisIntent: { analysisKey: "inventory-reorder-risk", params: {} } }), tx },
+      );
+      assert("reorder-risk: belowCount angka", typeof resK2.metrics.belowCount === "number");
+      assert("reorder-risk: totalSuggestedQuantity string desimal", typeof resK2.metrics.totalSuggestedQuantity === "string");
+
+      /* (L) Validasi param & otorisasi ULANG (defense-in-depth) */
+      await expectFail("params budget-variance tanpa budgetId -> validation", () =>
+        askAnalysis(actorA, { question: "varians anggaran?", analysisKey: "budget-variance", params: {} }, { provider: makeFakeProvider(), tx }),
+      );
+      await expectFail("analysisKey tak dikenal -> validation", () =>
+        askAnalysis(actorA, { question: "analisis rahasia?", analysisKey: "tidak-ada" }, { provider: makeFakeProvider(), tx }),
+      );
+      await expectFail("intent 'none' dari provider -> validation", () =>
+        askAnalysis(actorA, { question: "cuaca hari ini?" }, { provider: makeFakeProvider({ analysisIntent: { analysisKey: "none" } }), tx }),
+      );
+      // Actor terbatas: hanya ai.assistant.use + sales.ar.read (ar-aging-risk OK; budget-variance TIDAK).
+      const partialAnalysisActor: AuthContext = {
+        ...actorA,
+        grants: actorA.grants.filter((g) => g.code === "ai.assistant.use" || g.code === "sales.ar.read"),
+      };
+      await expectFail("analisis di luar izin ditolak server (forbidden)", () =>
+        askAnalysis(
+          partialAnalysisActor,
+          { question: "varians anggaran?", analysisKey: "budget-variance", params: { budgetId: "00000000-0000-4000-8000-000000000001" } },
+          { provider: makeFakeProvider(), tx },
+        ),
+      );
+      const fakeL = makeFakeProvider({ analysisIntent: { analysisKey: "ar-aging-risk", params: {} } });
+      await askAnalysis(partialAnalysisActor, { question: "risiko piutang?" }, { provider: fakeL, tx });
+      const lPrompt = fakeL.calls[0]?.prompt ?? "";
+      assert("prompt analisis hanya memuat yang diizinkan (tanpa income-trend)", !lPrompt.includes("income-trend"));
+      assert("prompt analisis memuat yang diizinkan (ar-aging-risk)", lPrompt.includes("ar-aging-risk"));
+
+      /* (M) Kill-switch juga melindungi jalur analisis (guardedPreflight bersama) */
+      await setSettings(tx, { enabled: false });
+      const fakeM = makeFakeProvider({ analysisIntent: { analysisKey: "income-trend", params: { from: FROM, to: TO } } });
+      await expectFail("analisis ditolak saat AI dimatikan", () =>
+        askAnalysis(actorA, { question: "tren laba rugi?" }, { provider: fakeM, tx }),
+      );
+      assert("provider tidak dipanggil saat dimatikan (analisis)", fakeM.calls.length === 0);
+      await setSettings(tx, { enabled: true });
+
+      /* ============ Tahap 9E: HR/CRM lewat jalur report-query 9C ============ */
+      // (a) Ter-register di katalog ekspor (dipakai askReport).
+      assert("hr-headcount ter-register di katalog", findExportEntry("hr-headcount") !== undefined);
+      assert("payslip-register ter-register di katalog", findExportEntry("payslip-register") !== undefined);
+      assert("sales (CRM-adjacent) ter-register di katalog", findExportEntry("sales") !== undefined);
+
+      // (b) Jalur penuh HR via askReport (reportKey hr-headcount, query {} valid).
+      const fakeE1 = makeFakeProvider({ intent: { reportKey: "hr-headcount", query: {} } });
+      const resE1 = await askReport(actorA, { question: "Berapa jumlah karyawan per departemen?" }, { provider: fakeE1, tx });
+      assert("askReport melayani laporan HR", resE1.report.key === "hr-headcount");
+
+      // (c) Minimisasi: laporan personal => kolom nama orang dibuang sebelum masuk prompt.
+      const redactedHr = redactRow({ employeeName: "Budi Sentosa", headcount: 5, id: "e1" }, true);
+      assert("redaksi HR membuang nama karyawan & id", !("employeeName" in redactedHr) && !("id" in redactedHr));
+      const e1SummarizePrompt = fakeE1.calls[1]?.prompt ?? "";
+      assert("prompt ringkasan HR memuat laporan (bukan nama mentah)", e1SummarizePrompt.includes("hr-headcount"));
+
+      // (d) Actor tanpa izin HR => hr-* tidak ditawarkan DAN server menolak (model ngotot).
+      const noHrActor: AuthContext = {
+        ...actorA,
+        grants: actorA.grants.filter((g) => g.code === "ai.assistant.use" || g.code === "accounting.reports.read"),
+      };
+      const fakeE2 = makeFakeProvider({ intent: { reportKey: "hr-headcount", query: {} } });
+      await expectFail("laporan HR di luar izin ditolak server (forbidden)", () =>
+        askReport(noHrActor, { question: "jumlah karyawan?" }, { provider: fakeE2, tx }),
+      );
+      assert("prompt tidak menawarkan hr-* untuk actor tanpa izin", !(fakeE2.calls[0]?.prompt ?? "").includes("hr-headcount"));
 
       /* ------------------------------ Penutup -------------------------------- */
       const fy = await tx.select({ code: fiscalYears.code }).from(fiscalYears).where(eq(fiscalYears.code, "UJIFY2040")).limit(1);

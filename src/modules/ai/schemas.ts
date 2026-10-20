@@ -1,7 +1,9 @@
 import { z } from "zod";
 
+import { isoDateSchema, uuidSchema } from "@/server/validation";
+
 /* ------------------------------------------------------------------ */
-/* Skema modul AI (Tahap 9B-9C).                                      */
+/* Skema modul AI (Tahap 9B-9F).                                      */
 /* Nilai enum provider/ status ditulis ulang sebagai literal karena     */
 /* `z.enum` butuh tuple string; sama persis dengan skema di             */
 /* src/db/schema/ai.ts (sumber kebenaran).                              */
@@ -58,3 +60,40 @@ export const intentResultSchema = z.strictObject({
 });
 
 export type IntentResult = z.output<typeof intentResultSchema>;
+
+/**
+ * Body POST /api/ai/assistant/analyze (Tahap 9D). `analysisKey` opsional: bila kosong,
+ * provider mengklasifikasi dari katalog analisis yang diizinkan. `params` hanyalah
+ * calon parameter; nilai sebenarnya divalidasi skema tiap analisis (entry.parseParams).
+ */
+export const analyzeQuerySchema = z.strictObject({
+  question: z.string().trim().min(3, "Pertanyaan terlalu pendek.").max(QUESTION_CEILING),
+  analysisKey: z.string().min(1).max(64).optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
+});
+
+export type AnalyzeQueryInput = z.output<typeof analyzeQuerySchema>;
+
+/** Bentuk JSON intent analisis (cermin intentResultSchema, kunci `analysisKey`). */
+export const analysisIntentSchema = z.strictObject({
+  analysisKey: z.string().min(1).max(64),
+  params: z.record(z.string(), z.unknown()).default({}),
+  rationale: z.string().max(500).optional(),
+});
+
+export type AnalysisIntent = z.output<typeof analysisIntentSchema>;
+
+/**
+ * Query GET /api/ai/usage (Tahap 9F). Semua opsional; `from`/`to` membatasi
+ * rentang createdAt, `feature`/`userId` menyempitkan agregasi.
+ */
+export const usageQuerySchema = z
+  .strictObject({
+    from: isoDateSchema.optional(),
+    to: isoDateSchema.optional(),
+    feature: z.string().min(1).max(64).optional(),
+    userId: uuidSchema.optional(),
+  })
+  .refine((v) => !v.from || !v.to || v.to >= v.from, { path: ["to"], message: "to tidak boleh sebelum from." });
+
+export type UsageQueryInput = z.output<typeof usageQuerySchema>;

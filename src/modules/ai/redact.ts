@@ -1,5 +1,7 @@
 import type { CsvRow } from "@/modules/reporting/csv";
 
+import type { AnalysisOutcome } from "./analytics";
+
 /* ------------------------------------------------------------------ */
 /* Minimisasi data sebelum masuk prompt AI (Tahap 9C).                  */
 /* Free tier Google memakai konten untuk meningkatkan produk, jadi yang  */
@@ -76,5 +78,35 @@ export function buildSummaryData(input: {
     filter: input.filter,
     rowCount: input.rows.length,
     sample: input.rows.slice(0, topN).map((row) => redactRow(row, personalData)),
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Minimisasi hasil ANALISIS (Tahap 9D).                               */
+/* Analisis dibatasi ke domain finance/sales/inventory — tidak memuat    */
+/* baris personal karyawan — jadi `personalData=false` (kolom id/PII     */
+/* tetap dibuang, nama akun/produk bisnis dipertahankan agar penjelasan   */
+/* bermakna). `metrics` sudah agregat numerik dari service deterministik.  */
+/* ------------------------------------------------------------------ */
+
+export type AnalysisSummaryData = {
+  analysisKey: string;
+  analysisLabel: string;
+  /** Parameter analisis (tanggal/uuid/ambang) — echo filter, bukan nilai baris. */
+  params: Record<string, unknown>;
+  metrics: Record<string, string | number>;
+  series: CsvRow[];
+  flags: CsvRow[];
+};
+
+/** Susun blok data minimal untuk prompt penjelasan analisis. */
+export function redactAnalysis(outcome: AnalysisOutcome, topN: number = TOP_N_ROWS): AnalysisSummaryData {
+  return {
+    analysisKey: outcome.analysisKey,
+    analysisLabel: outcome.analysisLabel,
+    params: outcome.params,
+    metrics: outcome.metrics,
+    series: (outcome.series ?? []).slice(0, topN).map((row) => redactRow(row, false)),
+    flags: (outcome.flags ?? []).slice(0, topN).map((row) => redactRow(row, false)),
   };
 }

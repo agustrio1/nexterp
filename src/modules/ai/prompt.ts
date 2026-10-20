@@ -1,4 +1,4 @@
-import type { SummaryData } from "./redact";
+import type { AnalysisSummaryData, SummaryData } from "./redact";
 
 /* ------------------------------------------------------------------ */
 /* Template prompt asisten laporan (Tahap 9C).                          */
@@ -38,5 +38,44 @@ export function buildSummarizePrompt(question: string, data: SummaryData): strin
     `JUMLAH BARIS: ${data.rowCount}`,
     `DATA (hasil laporan sistem, sudah disaring — jangan dihitung ulang):\n${JSON.stringify(data.sample)}`,
     `Buat ringkasan singkat.`,
+  ].join("\n\n");
+}
+
+/* ------------------------------------------------------------------ */
+/* Prompt asisten ANALISIS (Tahap 9D).                                  */
+/* Sama seperti 9C: model hanya memilih SATU analysisKey dari daftar     */
+/* yang diizinkan + menyusun parameter, lalu menarasikan metrik/seri     */
+/* yang sudah dihitung deterministik. AI tidak menghitung/tidak SQL.      */
+/* ------------------------------------------------------------------ */
+
+export const ANALYZE_CLASSIFY_SYSTEM = `Anda asisten analitik ERP. Tugas Anda: memilih SATU jenis analisis dari daftar yang diizinkan pengguna, lalu menentukan parameternya.
+Aturan keras:
+- Hanya boleh memakai analysisKey yang ada di DAFTAR. Bila tidak ada yang cocok, kembalikan analysisKey "none".
+- DILARANG menulis SQL, DILARANG mengarang angka, DILARANG memakai analisis di luar daftar.
+- "params" adalah parameter analisis, contoh {"from":"2026-01-01","to":"2026-01-31"} atau {"fiscalYearId":"<uuid>"} untuk tren; {"budgetId":"<uuid>","variancePctThreshold":10} untuk varians anggaran; {} untuk analisis posisi kini. Kosongkan {} bila tidak yakin.
+- Balas HANYA JSON tanpa teks lain: {"analysisKey": string, "params": object, "rationale": string}.`;
+
+export const ANALYZE_EXPLAIN_SYSTEM = `Anda menjelaskan hasil analisis ERP (tren/anomali) dalam Bahasa Indonesia yang ringkas dan netral.
+Aturan keras:
+- SEMUA angka sudah tersedia di bagian METRIK/SERI/FLAGS. DILARANG menghitung, menjumlah, atau mengarang angka apa pun.
+- AI bukan sumber kebenaran. Sebutkan nama analisis, periode/filter, dan bahwa angka berasal dari service deterministik sistem.
+- Jelaskan arah (naik/turun/flat) atau anomali yang terdeteksi; jangan meminta data tambahan.`;
+
+/** Prompt klasifikasi analisis: katalog terizinkan + pertanyaan. Tanpa data bisnis. */
+export function buildAnalyzeClassifyPrompt(question: string, catalog: readonly CatalogLite[]): string {
+  const lines = catalog.map((entry) => `- ${entry.key}: ${entry.label}`).join("\n");
+  return `DAFTAR ANALISIS TERIZIN:\n${lines}\n\nPERTANYAAN PENGGUNA:\n${question}\n\nTentukan analysisKey + params sebagai JSON.`;
+}
+
+/** Prompt penjelasan analisis: pertanyaan + blok hasil deterministik yang sudah diminimasi. */
+export function buildAnalyzeExplainPrompt(question: string, data: AnalysisSummaryData): string {
+  return [
+    `PERTANYAAN:\n${question}`,
+    `ANALISIS: ${data.analysisLabel} (key: ${data.analysisKey})`,
+    `PARAMETER: ${JSON.stringify(data.params)}`,
+    `METRIK (dihitung service deterministik — jangan dihitung ulang):\n${JSON.stringify(data.metrics)}`,
+    data.series.length > 0 ? `SERI:\n${JSON.stringify(data.series)}` : "SERI: (tidak ada)",
+    data.flags.length > 0 ? `FLAGS ANOMALI:\n${JSON.stringify(data.flags)}` : "FLAGS ANOMALI: (tidak ada)",
+    `Jelaskan singkat arah/anomali berdasarkan angka di atas.`,
   ].join("\n\n");
 }

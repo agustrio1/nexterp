@@ -1,4 +1,5 @@
 import { env } from "@/config/env";
+import type { CsvRow } from "@/modules/reporting/csv";
 import { EXPORT_ENTRIES, findExportEntry } from "@/modules/reporting/export-catalog";
 import { requireActor } from "@/server/auth/actor";
 import { can, type AuthContext } from "@/server/authz";
@@ -14,24 +15,43 @@ import {
 import { parseWith } from "@/server/validation";
 import { ZodError } from "zod";
 
-import { assertCan, requireSettingsRow, type Tx } from "./_refs";
-import { buildClassifyPrompt, buildSummarizePrompt, CLASSIFY_SYSTEM, SUMMARIZE_SYSTEM } from "./prompt";
-import { buildSummaryData } from "./redact";
+import { findAnalysis, permittedAnalyses, type AnalysisEntry } from "./analytics";
+import { assertCan, requireSettingsRow, type Reader, type Tx } from "./_refs";
+import {
+  ANALYZE_CLASSIFY_SYSTEM,
+  ANALYZE_EXPLAIN_SYSTEM,
+  buildAnalyzeClassifyPrompt,
+  buildAnalyzeExplainPrompt,
+  buildClassifyPrompt,
+  buildSummarizePrompt,
+  CLASSIFY_SYSTEM,
+  SUMMARIZE_SYSTEM,
+} from "./prompt";
+import { buildSummaryData, redactAnalysis } from "./redact";
 import { AiError, type AiProvider, type AiRequest, type AiResult, resolveProvider } from "./provider";
 import { checkQuota } from "./quota";
-import type { AiRequestStatus, AskReportQueryInput, IntentResult } from "./schemas";
-import { intentResultSchema } from "./schemas";
+import type {
+  AiRequestStatus,
+  AnalysisIntent,
+  AnalyzeQueryInput,
+  AskReportQueryInput,
+  IntentResult,
+} from "./schemas";
+import { analysisIntentSchema, intentResultSchema } from "./schemas";
 import { logAiRequest } from "./usage-log";
 
 /* ------------------------------------------------------------------ */
-/* Asisten "bahasa alami -> laporan" (Tahap 9C).                       */
-/* Alur satu arah & deterministik, sesuai bagian 18 dokumen induk:      */
-/*   intent -> validasi parameter -> cek otorisasi -> service laporan    */
-/*   (sumber angka) -> ringkasan AI. Tidak ada SQL bebas; AI tidak       */
-/*   menghitung. Provider bisa diinjeksi (tes memakai fake tanpa jaringan).* */
+/* Asisten "bahasa alami" (Tahap 9C laporan + 9D analisis).            */
+/* Alur satu arah & deterministik, sesuai bagian 18 dokumen induk:       */
+/*   intent -> validasi parameter -> cek otorisasi -> service deterministik */
+/*   (sumber angka) -> narasi AI. Tidak ada SQL bebas; AI tidak          */
+/*   menghitung. Provider bisa diinjeksi (tes memakai fake tanpa jaringan). */
 /* ------------------------------------------------------------------ */
 
 const FEATURE = "report.assistant";
+const ANALYSIS_FEATURE = "analysis.assistant";
+
+type SettingsRow = Awaited<ReturnType<typeof requireSettingsRow>>;
 
 export type AskReportInput = AskReportQueryInput;
 
@@ -43,7 +63,19 @@ export type AssistantResult = {
   disclaimer: string;
 };
 
-type AskReportOptions = { provider?: AiProvider; tx?: Tx };
+export type AskAnalysisInput = AnalyzeQueryInput;
+
+export type AnalysisResult = {
+  answer: string;
+  analysis: { key: string; label: string; params: unknown; source: "deterministic service" };
+  metrics: Record<string, string | number>;
+  series: CsvRow[];
+  flags: CsvRow[];
+  meta: { model: string; inputTokens: number; outputTokens: number; durationMs: number };
+  disclaimer: string;
+};
+
+type AssistantOptions = { provider?: AiProvider; tx?: Tx };
 
 /** Ambil objek JSON pertama dari teks provider (toleransi pagar ```json dan teks pengantar). */
 function extractJsonObject(text: string): unknown {
@@ -71,33 +103,37 @@ async function callProvider(provider: AiProvider, request: AiRequest, maxOutputT
   }
 }
 
-export async function askReport(
-  actor: AuthContext,
-  input: AskReportInput,
-  options: AskReportOptions = {},
-): Promise<AssistantResult> {
-  assertCan(actor, "ai.assistant.use");
-
-  const reader = options.tx ?? db;
-  const settings = await requireSettingsRow(reader);
+/**
+ * Gerbang bersama 9C & 9D — dijalankan SEBELUM panggilan provider apa pun.
+ * Urutan tetap: kill-switch -> batas panjang -> kuota -> bangun provider.
+ * Masing-masing penolakan dicatat ke `ai_requests` (status disabled/validation/
+ * rate_limited) dan Melempar AppError; ERP inti tidak tersentuh.
+ *
+ * Saklar fungsional = ai_settings.enabled (selalu ditegakkan). Provider "none" = mati.
+ * AI_ENABLED (env) adalah guard egress GLOBAL: hanya wajib saat provider nyata (gemini)
+ * dipakai — karena justru di situ data keluar ke Google. Provider fake/injected (offline,
+ * tanpa jaringan/ongkos) tidak memerlukan AI_ENABLED, cukup saklar tenant.
+ */
+async function guardedPreflight(args: {
+  actor: AuthContext;
+  feature: string;
+  reader: Reader;
+  settings: SettingsRow;
+  question: string;
+  providerOverride?: AiProvider;
+}): Promise<AiProvider> {
+  const { actor, feature, reader, settings, question } = args;
   const providerName = settings.provider;
-  const startedAt = Date.now();
-  let inputTokens = 0;
-  let outputTokens = 0;
+  const egressAllowed = providerName !== "gemini" || env.AI_ENABLED;
 
-  // Saklar fungsional = ai_settings.enabled (selalu ditegakkan). Provider "none" = mati.
-  // AI_ENABLED (env) adalah guard egress GLOBAL: hanya wajib saat provider nyata (gemini)
-  // dipakai — karena justru di situ data keluar ke Google. Provider fake/injected (offline,
-  // tanpa jaringan/ongkos) tidak memerlukan AI_ENABLED, cukup saklar tenant.
-  const egressAllowed = settings.provider !== "gemini" || env.AI_ENABLED;
-  if (!settings.enabled || settings.provider === "none" || !egressAllowed) {
-    await logAiRequest({ userId: actor.userId, feature: FEATURE, provider: providerName, status: "disabled" }, reader);
+  if (!settings.enabled || providerName === "none" || !egressAllowed) {
+    await logAiRequest({ userId: actor.userId, feature, provider: providerName, status: "disabled" }, reader);
     throw businessRule("Asisten AI sedang dimatikan.");
   }
 
   // Batas panjang input dinamis (di samping plafon statis skema).
-  if (input.question.length > settings.maxInputChars) {
-    await logAiRequest({ userId: actor.userId, feature: FEATURE, provider: providerName, status: "validation" }, reader);
+  if (question.length > settings.maxInputChars) {
+    await logAiRequest({ userId: actor.userId, feature, provider: providerName, status: "validation" }, reader);
     throw validationFailed([
       { path: "question", message: `Pertanyaan melebihi batas ${settings.maxInputChars} karakter.` },
     ]);
@@ -106,15 +142,42 @@ export async function askReport(
   try {
     await checkQuota(reader, actor.userId, settings, new Date());
   } catch (error) {
-    await logAiRequest({ userId: actor.userId, feature: FEATURE, provider: providerName, status: "rate_limited" }, reader);
+    await logAiRequest({ userId: actor.userId, feature, provider: providerName, status: "rate_limited" }, reader);
     throw error;
   }
 
-  const provider = options.provider ?? resolveProvider({
-    provider: settings.provider,
-    model: settings.model,
-    maxOutputTokens: settings.maxOutputTokens,
+  return (
+    args.providerOverride ??
+    resolveProvider({
+      provider: settings.provider,
+      model: settings.model,
+      maxOutputTokens: settings.maxOutputTokens,
+    })
+  );
+}
+
+export async function askReport(
+  actor: AuthContext,
+  input: AskReportInput,
+  options: AssistantOptions = {},
+): Promise<AssistantResult> {
+  assertCan(actor, "ai.assistant.use");
+
+  const reader = options.tx ?? db;
+  const settings = await requireSettingsRow(reader);
+  const providerName = settings.provider;
+  const provider = await guardedPreflight({
+    actor,
+    feature: FEATURE,
+    reader,
+    settings,
+    question: input.question,
+    providerOverride: options.provider,
   });
+
+  const startedAt = Date.now();
+  let inputTokens = 0;
+  let outputTokens = 0;
 
   // Katalog yang DIIZINKAN saja — model tidak pernah melihat laporan di luar izin pengguna.
   const permitted = EXPORT_ENTRIES.filter((entry) => can(actor.grants, entry.permission));
@@ -160,12 +223,13 @@ export async function askReport(
     inputTokens += described.inputTokens;
     outputTokens += described.outputTokens;
 
+    const model = described.model || classify.model;
     await logAiRequest(
       {
         userId: actor.userId,
         feature: FEATURE,
         provider: providerName,
-        model: described.model || classify.model,
+        model,
         status: "ok",
         reportKey: resolved.entry.key,
         filters: safeFilters(resolved.query),
@@ -186,7 +250,7 @@ export async function askReport(
       },
       data: outcome.rows,
       meta: {
-        model: described.model || classify.model,
+        model,
         inputTokens,
         outputTokens,
         durationMs: Date.now() - startedAt,
@@ -197,6 +261,130 @@ export async function askReport(
     await logAiRequest({
       userId: actor.userId,
       feature: FEATURE,
+      provider: providerName,
+      status: statusForError(error),
+      errorClass: error instanceof AiError ? error.kind : error instanceof Error ? error.name : "unknown",
+      inputTokens,
+      outputTokens,
+      durationMs: Date.now() - startedAt,
+    }, reader);
+    throw error;
+  }
+}
+
+/**
+ * Asisten analisis 9D: intent -> validasi param -> otorisasi ULANG -> hitung
+ * deterministik via service laporan (analytics.ts) -> AI menjelaskan. Angka selalu
+ * dari service; provider fake/injected memungkinkan uji tanpa jaringan.
+ */
+export async function askAnalysis(
+  actor: AuthContext,
+  input: AskAnalysisInput,
+  options: AssistantOptions = {},
+): Promise<AnalysisResult> {
+  assertCan(actor, "ai.assistant.use");
+
+  const reader = options.tx ?? db;
+  const settings = await requireSettingsRow(reader);
+  const providerName = settings.provider;
+  const provider = await guardedPreflight({
+    actor,
+    feature: ANALYSIS_FEATURE,
+    reader,
+    settings,
+    question: input.question,
+    providerOverride: options.provider,
+  });
+
+  const startedAt = Date.now();
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let firstModel = "";
+
+  // Katalog analisis yang DIIZINKAN saja — model tidak pernah melihat yang lain.
+  const permitted = permittedAnalyses(actor.grants);
+  if (permitted.length === 0) {
+    await logAiRequest({ userId: actor.userId, feature: ANALYSIS_FEATURE, provider: providerName, status: "unauthorized" }, reader);
+    throw forbidden("Anda tidak punya izin untuk analisis apa pun.");
+  }
+
+  try {
+    // 1) Intent analisis: dari input.analysisKey (jalan pintas) atau klasifikasi provider.
+    let intent: AnalysisIntent;
+    if (input.analysisKey) {
+      intent = { analysisKey: input.analysisKey, params: input.params ?? {}, rationale: undefined };
+    } else {
+      const classify = await callProvider(
+        provider,
+        {
+          system: ANALYZE_CLASSIFY_SYSTEM,
+          prompt: buildAnalyzeClassifyPrompt(input.question, permitted.map((e) => ({ key: e.key, label: e.label }))),
+          json: true,
+        },
+        settings.maxOutputTokens,
+      );
+      inputTokens += classify.inputTokens;
+      outputTokens += classify.outputTokens;
+      firstModel = classify.model;
+      intent = parseWith(analysisIntentSchema, extractJsonObject(classify.text));
+    }
+
+    // 2) Validasi + otorisasi ULANG di server (jangan pernah percaya model).
+    const resolved = resolveAnalysisIntent(actor, intent);
+
+    // 3) Hitung angka NYATA lewat service deterministik (analytics.ts).
+    const outcome = await resolved.entry.compute(actor, resolved.params, options.tx);
+
+    // 4) Jelaskan angka yang sudah dihitung & diminimasi (bukan angka dari model).
+    const summary = redactAnalysis(outcome);
+    const explained = await callProvider(
+      provider,
+      { system: ANALYZE_EXPLAIN_SYSTEM, prompt: buildAnalyzeExplainPrompt(input.question, summary) },
+      settings.maxOutputTokens,
+    );
+    inputTokens += explained.inputTokens;
+    outputTokens += explained.outputTokens;
+
+    const model = explained.model || firstModel;
+    await logAiRequest(
+      {
+        userId: actor.userId,
+        feature: ANALYSIS_FEATURE,
+        provider: providerName,
+        model,
+        status: "ok",
+        reportKey: resolved.entry.key,
+        filters: safeFilters(resolved.params),
+        inputTokens,
+        outputTokens,
+        durationMs: Date.now() - startedAt,
+      },
+      reader,
+    );
+
+    return {
+      answer: explained.text,
+      analysis: {
+        key: resolved.entry.key,
+        label: resolved.entry.label,
+        params: resolved.params,
+        source: "deterministic service",
+      },
+      metrics: outcome.metrics,
+      series: outcome.series ?? [],
+      flags: outcome.flags ?? [],
+      meta: {
+        model,
+        inputTokens,
+        outputTokens,
+        durationMs: Date.now() - startedAt,
+      },
+      disclaimer: "Angka dihitung oleh service deterministik; AI hanya menjelaskan dan bukan sumber kebenaran.",
+    };
+  } catch (error) {
+    await logAiRequest({
+      userId: actor.userId,
+      feature: ANALYSIS_FEATURE,
       provider: providerName,
       status: statusForError(error),
       errorClass: error instanceof AiError ? error.kind : error instanceof Error ? error.name : "unknown",
@@ -243,6 +431,28 @@ function resolveIntent(actor: AuthContext, intent: IntentResult): ResolvedIntent
   return { entry, query: entry.parseQuery(intent.query) };
 }
 
+type ResolvedAnalysis = { entry: AnalysisEntry; params: Record<string, unknown> };
+
+/**
+ * Cermin resolveIntent untuk katalog analisis. Param divalidasi skema tiap analisis
+ * (entry.parseParams -> ZodError -> validation) SEBELUM compute. Tidak menulis log.
+ */
+function resolveAnalysisIntent(actor: AuthContext, intent: AnalysisIntent): ResolvedAnalysis {
+  if (intent.analysisKey === "none") {
+    throw validationFailed([{ path: "analysisKey", message: "Tidak ada analisis yang cocok untuk pertanyaan ini." }]);
+  }
+
+  const entry = findAnalysis(intent.analysisKey);
+  if (!entry) {
+    throw validationFailed([{ path: "analysisKey", message: "Analisis yang dipilih tidak dikenal." }]);
+  }
+  if (!can(actor.grants, entry.permission)) {
+    throw forbidden("Anda tidak punya izin untuk analisis tersebut.");
+  }
+
+  return { entry, params: asRecord(entry.parseParams(intent.params)) };
+}
+
 const asRecord = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 
@@ -255,8 +465,14 @@ function safeFilters(query: unknown): Record<string, unknown> {
   return out;
 }
 
-/** Varian untuk route: bangun actor dari sesi lalu jalankan askReport. */
-export async function askReportFromSession(input: AskReportInput, options: AskReportOptions = {}) {
+/** Varian route 9C: bangun actor dari sesi lalu jalankan askReport. */
+export async function askReportFromSession(input: AskReportInput, options: AssistantOptions = {}) {
   const actor = await requireActor();
   return askReport(actor, input, options);
+}
+
+/** Varian route 9D: bangun actor dari sesi lalu jalankan askAnalysis. */
+export async function askAnalysisFromSession(input: AskAnalysisInput, options: AssistantOptions = {}) {
+  const actor = await requireActor();
+  return askAnalysis(actor, input, options);
 }
