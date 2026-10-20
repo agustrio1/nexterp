@@ -27,7 +27,6 @@ import { db } from "@/server/db";
  * Peringatan soft (status tetap 200): queue backlog > 100, ai_settings belum
  * dikonfigurasi — keduanya tidak menghentikan API tapi masuk log warn.
  */
-export const dynamic = "force-dynamic";
 
 // Boot timestamp modul — konstan per proses Node. Untuk menghitung uptime.
 const BOOT_TS = Date.now();

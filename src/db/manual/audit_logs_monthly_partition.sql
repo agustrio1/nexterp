@@ -73,6 +73,15 @@ $$;
 -- ---------------------------------------------------------------------
 ALTER TABLE "audit_logs" RENAME TO "audit_logs_legacy";
 
+-- Rename constraint agar nama bebas untuk CREATE TABLE baru.
+ALTER TABLE "audit_logs_legacy" RENAME CONSTRAINT "audit_logs_id_at_pk" TO "audit_logs_legacy_pkey";
+ALTER TABLE "audit_logs_legacy" RENAME CONSTRAINT "audit_logs_actor_id_users_id_fk" TO "audit_logs_legacy_actor_fk";
+
+-- Rename indeks lama agar tidak konflik dengan CREATE INDEX di parent baru.
+ALTER INDEX IF EXISTS "audit_logs_entity_idx" RENAME TO "audit_logs_legacy_entity_idx";
+ALTER INDEX IF EXISTS "audit_logs_actor_idx"  RENAME TO "audit_logs_legacy_actor_idx";
+ALTER INDEX IF EXISTS "audit_logs_at_idx"     RENAME TO "audit_logs_legacy_at_idx";
+
 -- ---------------------------------------------------------------------
 -- 2. Buat ulang `audit_logs` sebagai partitioned table (RANGE on `at`)
 --    Kolom, default, dan constraint identik dengan 0002_core_system.
