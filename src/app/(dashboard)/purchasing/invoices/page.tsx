@@ -1,0 +1,68 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Plus } from "lucide-react";
+
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
+
+type Invoice = { id: string; docNo: string | null; status: string; supplierId: string; poId: string; invoiceDate: string; dueDate: string; currency: string; totalForeign: string; totalBase: string };
+type Supplier = { id: string; code: string; name: string };
+
+const STATUS_STYLE: Record<string, string> = {
+  draft: "rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
+  posted: "rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700 dark:bg-green-900 dark:text-green-300",
+  reversed: "rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-700 dark:bg-orange-900 dark:text-orange-300",
+  cancelled: "rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700 dark:bg-red-900 dark:text-red-300",
+};
+
+export default function InvoicesPage() {
+  const [status, setStatus] = useState("");
+  const [supplierId, setSupplierId] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+
+  useEffect(() => {
+    fetch("/api/purchasing/suppliers?isActive=true", { credentials: "same-origin" }).then((r) => r.ok ? r.json() : { data: [] }).then((j: { data: Supplier[] }) => setSuppliers(j.data)).catch(() => {});
+  }, []);
+
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (supplierId) params.set("supplierId", supplierId);
+  const qs = params.toString();
+  const url = qs ? `/api/purchasing/invoices?${qs}` : "/api/purchasing/invoices";
+  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
+
+  const supplierName = (id: string) => { const s = suppliers.find((x) => x.id === id); return s ? `${s.code} — ${s.name}` : id.slice(0, 8); };
+
+  const columns: Column<Invoice>[] = [
+    { header: "No. Invoice", cell: (i) => i.docNo ? <code className="text-xs font-mono">{i.docNo}</code> : <span className="text-zinc-400">draft</span> },
+    { header: "Tanggal", cell: (i) => i.invoiceDate },
+    { header: "Jatuh Tempo", cell: (i) => i.dueDate },
+    { header: "Pemasok", cell: (i) => supplierName(i.supplierId) },
+    { header: "Mata Uang", cell: (i) => i.currency },
+    { header: "Total", cell: (i) => <span className="font-mono text-xs">{i.totalForeign}</span> },
+    { header: "Status", cell: (i) => <span className={STATUS_STYLE[i.status] ?? "rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800"}>{i.status}</span> },
+    { header: "Aksi", className: "w-[80px]", cell: (i) => <Link href={`/purchasing/invoices/${i.id}`}><Button variant="ghost" size="sm">Detail</Button></Link> },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Invoice Pemasok</h1>
+        <Link href="/purchasing/invoices/new"><Button size="sm"><Plus className="h-4 w-4" /> Baru</Button></Link>
+      </div>
+      <div className="flex gap-2">
+        <Select className="w-40" value={status} onChange={(e) => { setStatus(e.target.value); setRefreshKey((k) => k + 1); }}>
+          <option value="">Semua status</option><option value="draft">Draft</option><option value="posted">Posted</option><option value="reversed">Reversed</option><option value="cancelled">Cancelled</option>
+        </Select>
+        <Select className="w-56" value={supplierId} onChange={(e) => { setSupplierId(e.target.value); setRefreshKey((k) => k + 1); }}>
+          <option value="">Semua pemasok</option>{suppliers.map((s) => (<option key={s.id} value={s.id}>{s.code} — {s.name}</option>))}
+        </Select>
+      </div>
+      <DataTable<Invoice> key={refreshKey} url={fetchUrl} columns={columns} rowKey={(i) => i.id} emptyMessage="Belum ada invoice pemasok." />
+    </div>
+  );
+}

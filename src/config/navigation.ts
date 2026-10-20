@@ -72,10 +72,22 @@ export const navigationSections: NavSection[] = [
     ],
   },
   {
-    title: "Inventori & Procurement",
+    title: "Inventori",
     items: [
-      { label: "Gudang & Produk", href: "/inventory", icon: Warehouse, permission: "inventory.item.read" },
-      { label: "Pembelian", href: "/purchasing", icon: ShoppingCart, permission: "purchasing.po.read" },
+      { label: "Produk", href: "/products", icon: Package, permission: "inventory.products.read" },
+      { label: "Gudang", href: "/warehouses", icon: Warehouse, permission: "inventory.warehouses.read" },
+      { label: "Dokumen Stok", href: "/stock-documents", icon: ClipboardList, permission: "inventory.documents.read" },
+      { label: "Laporan Persediaan", href: "/inventory-reports", icon: BarChart3, permission: "inventory.stock.read" },
+    ],
+  },
+  {
+    title: "Pembelian",
+    items: [
+      { label: "Pemasok", href: "/purchasing/suppliers", icon: Users, permission: "purchasing.suppliers.read" },
+      { label: "Purchase Order", href: "/purchasing/purchase-orders", icon: ShoppingCart, permission: "purchasing.purchase_orders.read" },
+      { label: "Invoice Pemasok", href: "/purchasing/invoices", icon: FileText, permission: "purchasing.invoices.read" },
+      { label: "Pembayaran AP", href: "/purchasing/payments", icon: CreditCard, permission: "purchasing.payments.read" },
+      { label: "Laporan Pembelian", href: "/purchasing/reports", icon: BarChart3, permission: "purchasing.reports.read" },
     ],
   },
   {
