@@ -5,10 +5,8 @@ import {
   idParamsSchema,
   isoDateSchema,
   moneyString,
-  paginationSchema,
   parseWith,
   signedMoneyString,
-  toLimitOffset,
   uuidSchema,
 } from "@/server/validation";
 import { AppError } from "@/server/errors";
@@ -17,7 +15,10 @@ import { AppError } from "@/server/errors";
  * Unit test skema umum + parser murni (Tahap 3 -> diuji 10A).
  * `parseBody`/`parseQuery`/`parseParams` butuh `Request` — tidak diuji di sini
  * karena jalur HTTP sudah dilindungi `test-security.ts` (integrasi rollback).
- * Fokus: `parseWith`, konvensi `moneyString`, `paginationSchema`, `toLimitOffset`.
+ * Fokus: `parseWith`, konvensi `moneyString`, `signedMoneyString`, `isoDateSchema`.
+ *
+ * Catatan 10C: `paginationSchema`/`toLimitOffset` sudah dihapus dari kode produksi;
+ * paginasi modern memakai keyset opaque (`@/server/cursor`) — lihat `cursor.test.ts`.
  */
 
 describe("parseWith", () => {
@@ -116,39 +117,5 @@ describe("signedMoneyString (boleh negatif)", () => {
   it("tetap batasi desimal 2 dan integer 16", () => {
     expect(() => signedMoneyString.parse("-1.234")).toThrow();
     expect(() => signedMoneyString.parse("-12345678901234567")).toThrow();
-  });
-});
-
-describe("paginationSchema + toLimitOffset", () => {
-  it("default page=1 pageSize=20", () => {
-    const p = paginationSchema.parse({});
-    expect(p).toEqual({ page: 1, pageSize: 20 });
-  });
-
-  it("koersi string (query string) -> number", () => {
-    const p = paginationSchema.parse({ page: "3", pageSize: "50" });
-    expect(p).toEqual({ page: 3, pageSize: 50 });
-  });
-
-  it("pageSize > 100 ditolak (hard cap proteksi DB)", () => {
-    expect(() => paginationSchema.parse({ pageSize: "101" })).toThrow();
-    expect(paginationSchema.parse({ pageSize: "100" }).pageSize).toBe(100);
-  });
-
-  it("page < 1 ditolak", () => {
-    expect(() => paginationSchema.parse({ page: "0" })).toThrow();
-    expect(() => paginationSchema.parse({ page: "-1" })).toThrow();
-  });
-
-  it("toLimitOffset: (1, 20) -> {limit:20, offset:0}", () => {
-    expect(toLimitOffset({ page: 1, pageSize: 20 })).toEqual({ limit: 20, offset: 0 });
-  });
-
-  it("toLimitOffset: (3, 20) -> {limit:20, offset:40}", () => {
-    expect(toLimitOffset({ page: 3, pageSize: 20 })).toEqual({ limit: 20, offset: 40 });
-  });
-
-  it("toLimitOffset: (5, 100) -> {limit:100, offset:400}", () => {
-    expect(toLimitOffset({ page: 5, pageSize: 100 })).toEqual({ limit: 100, offset: 400 });
   });
 });

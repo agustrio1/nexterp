@@ -71,6 +71,10 @@ export const jobRuns = pgTable(
     // Antrian FIFO per status — cocok untuk claim SKIP LOCKED & daftar admin.
     index("job_runs_status_run_at_idx").on(t.status, t.runAt),
     index("job_runs_type_idx").on(t.type),
+    // Keyset paginasi listJobs (Tahap 10C): urutan kanonik (created_at, id)
+    // dipakai oleh admin list (semua status) dan filter `createdBy` user.
+    // PG backward-scan indeks untuk ORDER BY DESC.
+    index("job_runs_created_at_id_idx").on(t.createdAt, t.id),
     // Satu kunci idempotensi hanya satu job aktif (cancelled bebas diganti).
     uniqueIndex("job_runs_idempotency_uq")
       .on(t.idempotencyKey)

@@ -98,6 +98,11 @@ export const exchangeRates = pgTable(
     uniqueIndex("exchange_rates_pair_date_uq").on(t.fromCurrency, t.toCurrency, t.rateDate),
     check("exchange_rates_rate_chk", sql`${t.rate} > 0`),
     check("exchange_rates_pair_chk", sql`${t.fromCurrency} <> ${t.toCurrency}`),
+    // Keyset paginasi listExchangeRates (Tahap 10C): urutan kanonik
+    // (rate_date, id). Predikat OR pada service (
+    //   rate_date < cursor  OR  (rate_date = cursor AND id < cursor)
+    // ) memanfaatkan indeks ini lewat dua Branch Index Scan.
+    index("exchange_rates_rate_date_id_idx").on(t.rateDate, t.id),
   ],
 );
 

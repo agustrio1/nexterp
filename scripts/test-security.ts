@@ -202,27 +202,27 @@ async function main() {
       const artB = await getJobArtifact(adminOverride, jobB.id, tx);
       assert("getJobArtifact admin manage -> lolos untuk job milik B", artB.fileName === `idor-b-10b.csv`);
 
-      // listJobs: non-admin difaksakan hanya job sendiri.
-      const listA = await listJobs(actorA, { page: 1, pageSize: 100 }, tx);
-      const visibleToA = listA.rows.filter((r) => r.id === jobA.id || r.id === jobB.id);
+      // listJobs: non-admin difaksakan hanya job sendiri (Tahap 10C keyset).
+      const listA = await listJobs(actorA, { limit: 100 }, tx);
+      const visibleToA = listA.items.filter((r) => r.id === jobA.id || r.id === jobB.id);
       assert(
         "listJobs non-manage: hanya job sendiri muncul (dua fixture)",
         visibleToA.length === 1 && visibleToA[0]?.id === jobA.id,
       );
-      const listB = await listJobs(actorB, { page: 1, pageSize: 100 }, tx);
-      const visibleToB = listB.rows.filter((r) => r.id === jobA.id || r.id === jobB.id);
+      const listB = await listJobs(actorB, { limit: 100 }, tx);
+      const visibleToB = listB.items.filter((r) => r.id === jobA.id || r.id === jobB.id);
       assert(
         "listJobs non-manage B: hanya job sendiri muncul",
         visibleToB.length === 1 && visibleToB[0]?.id === jobB.id,
       );
       // Filter query.createdBy dicoba untuk intip job orang lain -> diabaikan untuk non-manage.
-      const listPeek = await listJobs(actorA, { page: 1, pageSize: 100, createdBy: ub.id }, tx);
-      const peekHits = listPeek.rows.filter((r) => r.id === jobB.id);
+      const listPeek = await listJobs(actorA, { limit: 100, createdBy: ub.id }, tx);
+      const peekHits = listPeek.items.filter((r) => r.id === jobB.id);
       assert("listJobs non-manage dengan createdBy asing -> 0 baris asing", peekHits.length === 0);
 
       // Admin (manage) tetap bisa memfilter bebas.
-      const listAdmin = await listJobs(adminOverride, { page: 1, pageSize: 100, createdBy: ub.id }, tx);
-      const adminHits = listAdmin.rows.filter((r) => r.id === jobB.id);
+      const listAdmin = await listJobs(adminOverride, { limit: 100, createdBy: ub.id }, tx);
+      const adminHits = listAdmin.items.filter((r) => r.id === jobB.id);
       assert("listJobs admin dengan createdBy -> menemukan job B", adminHits.length === 1);
 
       throw new Rollback("selesai — rollback");

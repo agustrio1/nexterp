@@ -67,16 +67,3 @@ export const moneyString = z
 export const signedMoneyString = z
   .string()
   .regex(/^-?\d{1,16}(\.\d{1,2})?$/, "Nominal harus angka dengan maksimal 2 desimal.");
-
-/** Paginasi server-side dari query string. */
-export const paginationSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-});
-
-export type Pagination = z.output<typeof paginationSchema>;
-
-/** Mengubah paginasi menjadi limit/offset untuk query Drizzle. */
-export function toLimitOffset({ page, pageSize }: Pagination): { limit: number; offset: number } {
-  return { limit: pageSize, offset: (page - 1) * pageSize };
-}

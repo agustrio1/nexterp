@@ -4,10 +4,11 @@ import { z } from "zod";
 import { createUserSchema, USER_STATUSES } from "@/modules/users/schemas";
 import { createUser, listUsers } from "@/modules/users/service";
 import { requirePermission } from "@/server/authz";
+import { keysetSchema } from "@/server/cursor";
 import { apiHandler } from "@/server/errors";
-import { paginationSchema, parseBody, parseQuery } from "@/server/validation";
+import { parseBody, parseQuery } from "@/server/validation";
 
-const listQuerySchema = paginationSchema.extend({
+const listQuerySchema = keysetSchema.extend({
   search: z.string().trim().max(100).optional(),
   status: z.enum(USER_STATUSES).optional(),
 });

@@ -31,6 +31,12 @@ const serverSchema = z.object({
     .transform((v) => v === "true"),
   GEMINI_API_KEY: z.string().min(1).optional(),
   GROQ_API_KEY: z.string().min(1).optional(),
+
+  // Tahap 10D — observability.
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  // Reporter error eksternal; default no-op (stub interface Sentry/lain disiapkan di 10D).
+  ERROR_REPORTER: z.enum(["none", "sentry"]).default("none"),
+  SENTRY_DSN: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof serverSchema>;

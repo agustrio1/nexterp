@@ -13,6 +13,15 @@ import {
   sameOriginViolation,
 } from "@/server/csrf";
 import { API_UNSAFE_LIMIT_PER_MINUTE, enforceRateLimit } from "@/server/rate-limit";
+import {
+  annotateRequestContext,
+  getRequestContext,
+  runWithRequestContext,
+  sanitizeRequestId,
+  type RequestContext,
+} from "@/server/request-context";
+import { errorFields, logger } from "@/server/logger";
+import { reportError } from "@/server/error-reporter";
 
 export type ErrorCode =
   | "UNAUTHENTICATED"
@@ -111,12 +120,25 @@ export function normalizeError(error: unknown): AppError {
 }
 
 /** Bentuk respons error baku: { error: { code, message, details?, requestId } } */
-export function toErrorResponse(error: unknown, requestId: string = crypto.randomUUID()): NextResponse {
+export function toErrorResponse(error: unknown, requestId?: string): NextResponse {
+  const ctx = getRequestContext();
+  const rid = requestId ?? ctx?.requestId ?? sanitizeRequestId(null);
   const appError = normalizeError(error);
 
   if (appError.code === "INTERNAL") {
     // Detail asli hanya masuk log server, tidak pernah ke klien.
-    console.error(`[error] requestId=${requestId}`, error);
+    logger.error("unhandled internal error", {
+      requestId: rid,
+      path: ctx?.path,
+      method: ctx?.method,
+      ...errorFields(error),
+    });
+    reportError(error, {
+      requestId: rid,
+      path: ctx?.path,
+      method: ctx?.method,
+      userId: ctx?.userId,
+    });
   }
 
   return NextResponse.json(
@@ -125,10 +147,10 @@ export function toErrorResponse(error: unknown, requestId: string = crypto.rando
         code: appError.code,
         message: appError.message,
         ...(appError.details ? { details: appError.details } : {}),
-        requestId,
+        requestId: rid,
       },
     },
-    { status: appError.status, headers: { "x-request-id": requestId } },
+    { status: appError.status, headers: { "x-request-id": rid } },
   );
 }
 
@@ -150,23 +172,69 @@ export function apiHandler<Args extends unknown[]>(
   handler: (...args: Args) => Promise<Response>,
 ): (...args: Args) => Promise<Response> {
   return async (...args: Args) => {
-    try {
-      const first = args[0];
-      if (first instanceof Request && isUnsafeMethod(first.method)) {
-        const violation = sameOriginViolation(first.headers, appOriginFrom(env.APP_URL));
-        if (violation) {
-          // Alasan hanya masuk log server (berisi origin klien); klien dapat pesan umum.
-          console.warn(`[csrf] ditolak method=${first.method} ${violation}`);
-          throw forbidden("Asal permintaan tidak dikenali.");
+    // 1) Bangun RequestContext dari argumen pertama (Request) — tanpa itu tetap
+    //    berjalan (handler telanjang mis. /api/health) dengan requestId baru.
+    const first = args[0];
+    const req = first instanceof Request ? first : undefined;
+    const requestId = sanitizeRequestId(req?.headers.get("x-request-id") ?? null);
+    const ctx: RequestContext = {
+      requestId,
+      method: req?.method?.toUpperCase(),
+      path: req ? new URL(req.url).pathname : undefined,
+      startedAt: Date.now(),
+    };
+
+    // 2) Semua log & error dalam scope handler ini otomatis ter-label requestId.
+    return runWithRequestContext(ctx, async () => {
+      try {
+        if (req && isUnsafeMethod(req.method)) {
+          const violation = sameOriginViolation(req.headers, appOriginFrom(env.APP_URL));
+          if (violation) {
+            // Alasan hanya masuk log server (berisi origin klien); klien dapat pesan umum.
+            logger.warn("csrf violation", {
+              requestId,
+              method: ctx.method,
+              path: ctx.path,
+              reason: violation,
+            });
+            throw forbidden("Asal permintaan tidak dikenali.");
+          }
+          const group = apiGroupFromPath(ctx.path ?? "");
+          const ip = clientIpFrom(req.headers);
+          await enforceRateLimit(db, apiBucket(group, ip), API_UNSAFE_LIMIT_PER_MINUTE);
         }
-        const group = apiGroupFromPath(new URL(first.url).pathname);
-        const ip = clientIpFrom(first.headers);
-        await enforceRateLimit(db, apiBucket(group, ip), API_UNSAFE_LIMIT_PER_MINUTE);
+        const response = await handler(...args);
+        // 3) Echo x-request-id di response header supaya klien bisa korelasi
+        //    (mis. untuk laporan bug). Tidak menimpa header yang sudah dipasang handler.
+        if (!response.headers.has("x-request-id")) {
+          try {
+            response.headers.set("x-request-id", requestId);
+          } catch {
+            // Header yang immutable (NativeResponse) — abaikan, log tetap ter-stamp.
+          }
+        }
+        logger.info("request completed", {
+          requestId,
+          method: ctx.method,
+          path: ctx.path,
+          status: response.status,
+          durationMs: Date.now() - ctx.startedAt,
+        });
+        return response;
+      } catch (error) {
+        unstable_rethrow(error);
+        return toErrorResponse(error, requestId);
       }
-      return await handler(...args);
-    } catch (error) {
-      unstable_rethrow(error);
-      return toErrorResponse(error);
-    }
+    });
   };
+}
+
+/**
+ * Helper untuk auth layer (actor.ts / session.ts) agar dapat men-stamp
+ * userId ke konteks aktif setelah login terverifikasi — logger berikutnya
+ * otomatis menyertakan userId tanpa perlu mengubah signature handler.
+ */
+export function annotateActorForLogging(userId: string | undefined): void {
+  if (!userId) return;
+  annotateRequestContext({ userId });
 }

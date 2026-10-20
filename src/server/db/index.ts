@@ -3,6 +3,7 @@ import { Pool } from "pg";
 
 import { env, isProduction } from "@/config/env";
 import * as schema from "@/db/schema";
+import { logger } from "@/server/logger";
 
 /**
  * Satu Pool per proses. Disimpan di globalThis agar tidak membuat koneksi baru
@@ -22,7 +23,7 @@ const pool =
 
 pool.on("error", (error) => {
   // Error pada koneksi idle tidak boleh menjatuhkan proses.
-  console.error("[db] Error pada koneksi idle:", error.message);
+  logger.error("db idle connection error", { errorMessage: error.message });
 });
 
 globalForDb.__erpPool = pool;

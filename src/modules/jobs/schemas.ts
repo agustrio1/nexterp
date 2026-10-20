@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { paginationSchema } from "@/server/validation";
+import { keysetSchema } from "@/server/cursor";
 
 /* ------------------------------------------------------------------ */
 /* Skema job latar belakang (Tahap 8D).                                */
@@ -59,8 +59,8 @@ export const enqueuePayrollRunSchema = z.strictObject({
 
 export type EnqueuePayrollRunInput = z.output<typeof enqueuePayrollRunSchema>;
 
-/** Query daftar job (paginasi standar + filter status/jenis). */
-export const listJobsQuerySchema = paginationSchema.extend({
+/** Query daftar job (Tahap 10C: keyset paginasi opaque cursor + filter status/jenis/pemilik). */
+export const listJobsQuerySchema = keysetSchema.extend({
   status: z.enum(JOB_STATUSES).optional(),
   type: z.enum(JOB_TYPES).optional(),
   createdBy: uuidSchema.optional(),

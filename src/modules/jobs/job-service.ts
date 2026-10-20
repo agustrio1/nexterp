@@ -6,8 +6,9 @@ import { db } from "@/server/db";
 import { businessRule, forbidden, notFound } from "@/server/errors";
 import { nextDocumentNumber } from "@/server/numbering";
 import { findExportEntry } from "@/modules/reporting/export-catalog";
-import { toLimitOffset } from "@/server/validation";
+import { decodeCursor, keysetPage } from "@/server/cursor";
 import { can, type AuthContext, type PermissionCode } from "@/server/authz";
+import { z } from "zod";
 
 import { assertCan, inTx, lockJob, requireJobForActor, type Tx } from "./_refs";
 import { JOB_HANDLERS, type JobOutcome } from "./handlers";
@@ -203,10 +204,28 @@ export async function enqueuePayrollRun(
 
 /* ------------------------------- Baca ------------------------------- */
 
+/**
+ * Tuple cursor untuk keyset paginasi job: (createdAt, id) terbaru-duluan.
+ * Format ISO-8601 dengan presisi millisecond — stabil terhadap timezone
+ * karena Postgres mengembalikan timestamptz sebagai Date (UTC).
+ */
+const jobsCursorSchema = z.object({
+  t: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+  i: z.uuid(),
+});
+
+function jobsCursorTuple(row: { createdAt: Date; id: string }): { t: string; i: string } {
+  return { t: row.createdAt.toISOString(), i: row.id };
+}
+
+/**
+ * Daftar job latar belakang (Tahap 10C: keyset opaque cursor).
+ * Filter: status, type, createdBy (di-faksakan ke actor.userId kecuali memegang manage).
+ * Tidak ada total count (menghindari full-table scan); klien memakai `hasMore`.
+ */
 export async function listJobs(actor: AuthContext, query: ListJobsQuery, externalTx?: Tx) {
   assertCan(actor, "reporting.exports.read");
   const reader = externalTx ?? db;
-  const { limit, offset } = toLimitOffset(query);
 
   // Tahap 10B (IDOR): tanpa `exports.manage`, daftar difaksakan ke job milik sendiri;
   // filter lintas-pengguna dari query diabaikan. Admin tetap boleh memfilter bebas.
@@ -217,6 +236,12 @@ export async function listJobs(actor: AuthContext, query: ListJobsQuery, externa
       : undefined
     : eq(jobRuns.createdBy, actor.userId);
 
+  const cursor = query.cursor === undefined ? undefined : decodeCursor(query.cursor, jobsCursorSchema);
+  const keysetCondition =
+    cursor === undefined
+      ? undefined
+      : sql`(${jobRuns.createdAt}, ${jobRuns.id}) < (${cursor.t}::timestamptz, ${cursor.i}::uuid)`;
+
   const rows = await reader
     .select(listColumns)
     .from(jobRuns)
@@ -225,13 +250,15 @@ export async function listJobs(actor: AuthContext, query: ListJobsQuery, externa
         query.status ? eq(jobRuns.status, query.status) : undefined,
         query.type ? eq(jobRuns.type, query.type) : undefined,
         ownerFilter,
+        keysetCondition,
       ),
     )
     .orderBy(desc(jobRuns.createdAt), desc(jobRuns.id))
-    .limit(limit)
-    .offset(offset);
+    // Ambil limit + 1 untuk mendeteksi `hasMore` tanpa COUNT(*) kedua.
+    .limit(query.limit + 1);
 
-  return { rows, page: query.page, pageSize: query.pageSize };
+  const page = keysetPage(rows, query.limit, (r) => jobsCursorTuple({ createdAt: r.createdAt, id: r.id }));
+  return { items: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore };
 }
 
 export async function getJob(actor: AuthContext, id: string, externalTx?: Tx) {

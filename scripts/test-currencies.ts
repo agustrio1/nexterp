@@ -74,11 +74,11 @@ async function main() {
   await updateCurrency(actor, "JPY", { isActive: true });
 
   await createExchangeRate(actor, { fromCurrency: "USD", rateDate: "2027-01-06", rate: "16300" });
-  const rates = await listExchangeRates(actor, { fromCurrency: "USD", page: 1, pageSize: 20 });
-  console.log("daftar kurs USD", rates.total, rates.items.map((r) => r.rateDate).join(","));
+  const rates = await listExchangeRates(actor, { fromCurrency: "USD", limit: 20 });
+  console.log("daftar kurs USD", rates.items.length, rates.items.map((r) => r.rateDate).join(","), "hasMore=" + rates.hasMore);
 
-  const ranged = await listExchangeRates(actor, { dateFrom: "2027-01-06", page: 1, pageSize: 20 });
-  console.log("filter tanggal", ranged.total);
+  const ranged = await listExchangeRates(actor, { dateFrom: "2027-01-06", limit: 20 });
+  console.log("filter tanggal", ranged.items.length);
 
   await expectError("izin", () => listCurrencies({ ...actor, grants: [] }));
   await expectError("tak ada", () => getCurrency(actor, "ZZZ"));

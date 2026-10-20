@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt, lte, or } from "drizzle-orm";
+import { z } from "zod";
 
 import { companySettings, currencies, exchangeRates } from "@/db/schema";
 import { toDb } from "@/lib/money";
@@ -11,9 +12,9 @@ import type {
 } from "@/modules/organization/finance-schemas";
 import { audit } from "@/server/audit";
 import { can, type AuthContext, type PermissionCode } from "@/server/authz";
+import { decodeCursor, keysetPage } from "@/server/cursor";
 import { db } from "@/server/db";
 import { businessRule, conflict, forbidden, notFound, validationFailed } from "@/server/errors";
-import { toLimitOffset } from "@/server/validation";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Reader = Pick<typeof db, "select">;
@@ -230,28 +231,42 @@ export async function updateCurrency(actor: AuthContext, code: string, input: Up
 /* Kurs                                                                */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Tuple cursor keyset listExchangeRates: (rateDate, id) terbaru-duluan.
+ * rateDate string ISO (YYYY-MM-DD) karena kolom bertipe `date mode:string`.
+ * Index `(rateDate DESC, id DESC)` dibutuhkan agar keyset tetap O(log n);
+ * lihat migrasi Tahap 10C untuk penambahan indeks tersebut.
+ */
+const ratesCursorSchema = z.object({
+  d: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  i: z.uuid(),
+});
+
 export async function listExchangeRates(actor: AuthContext, query: ListExchangeRatesQuery) {
   assertCan(actor, "core.exchange_rates.read");
 
+  const cursor = query.cursor === undefined ? undefined : decodeCursor(query.cursor, ratesCursorSchema);
   const where = and(
     query.fromCurrency === undefined ? undefined : eq(exchangeRates.fromCurrency, query.fromCurrency),
     query.dateFrom === undefined ? undefined : gte(exchangeRates.rateDate, query.dateFrom),
     query.dateTo === undefined ? undefined : lte(exchangeRates.rateDate, query.dateTo),
+    cursor === undefined
+      ? undefined
+      : or(
+          lt(exchangeRates.rateDate, cursor.d),
+          and(eq(exchangeRates.rateDate, cursor.d), lt(exchangeRates.id, cursor.i)),
+        ),
   );
-  const { limit, offset } = toLimitOffset(query);
 
-  const [items, [countRow]] = await Promise.all([
-    db
-      .select(rateColumns)
-      .from(exchangeRates)
-      .where(where)
-      .orderBy(desc(exchangeRates.rateDate), asc(exchangeRates.fromCurrency))
-      .limit(limit)
-      .offset(offset),
-    db.select({ total: sql<number>`count(*)::int` }).from(exchangeRates).where(where),
-  ]);
+  const rows = await db
+    .select(rateColumns)
+    .from(exchangeRates)
+    .where(where)
+    .orderBy(desc(exchangeRates.rateDate), desc(exchangeRates.id))
+    .limit(query.limit + 1);
 
-  return { items, total: countRow?.total ?? 0, page: query.page, pageSize: query.pageSize };
+  const page = keysetPage(rows, query.limit, (r) => ({ d: r.rateDate, i: r.id }));
+  return { items: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore };
 }
 
 /**

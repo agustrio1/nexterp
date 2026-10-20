@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { keysetSchema } from "@/server/cursor";
+
 /* ------------------------------------------------------------------ */
 /* Helper                                                              */
 /* ------------------------------------------------------------------ */
@@ -189,13 +191,11 @@ export const createExchangeRateSchema = z.strictObject({
     .optional(),
 });
 
-export const listExchangeRatesQuerySchema = z
-  .strictObject({
+export const listExchangeRatesQuerySchema = keysetSchema
+  .extend({
     fromCurrency: currencyCodeSchema.optional(),
     dateFrom: dateSchema.optional(),
     dateTo: dateSchema.optional(),
-    page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(100).default(20),
   })
   .refine((value) => !value.dateFrom || !value.dateTo || value.dateFrom <= value.dateTo, {
     path: ["dateTo"],

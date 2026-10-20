@@ -1,4 +1,5 @@
 import { and, desc, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import {
   accounts,
@@ -18,9 +19,9 @@ import type {
 import { audit } from "@/server/audit";
 import { hashPassword } from "@/server/auth/password";
 import { can, type AuthContext, type PermissionCode } from "@/server/authz";
+import { decodeCursor, keysetPage } from "@/server/cursor";
 import { db } from "@/server/db";
 import { businessRule, conflict, forbidden, notFound, validationFailed } from "@/server/errors";
-import { toLimitOffset } from "@/server/validation";
 
 const SUPER_ADMIN_ROLE = "super_admin";
 
@@ -204,12 +205,20 @@ async function assertCanManageTarget(
 /* Operasi                                                             */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Query daftar pengguna (Tahap 10C: keyset opaque cursor + filter status/search).
+ */
 export type ListUsersQuery = {
-  page: number;
-  pageSize: number;
+  limit: number;
+  cursor?: string | undefined;
   search?: string | undefined;
   status?: "active" | "suspended" | undefined;
 };
+
+const usersCursorSchema = z.object({
+  t: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+  i: z.uuid(),
+});
 
 export async function listUsers(actor: AuthContext, query: ListUsersQuery) {
   assertCan(actor, "core.users.read");
@@ -220,21 +229,26 @@ export async function listUsers(actor: AuthContext, query: ListUsersQuery) {
     const pattern = `%${escapeLike(query.search)}%`;
     filters.push(or(ilike(users.name, pattern), ilike(users.email, pattern)));
   }
+  const cursor = query.cursor === undefined ? undefined : decodeCursor(query.cursor, usersCursorSchema);
+  if (cursor) {
+    filters.push(
+      sql`(${users.createdAt}, ${users.id}) < (${cursor.t}::timestamptz, ${cursor.i}::uuid)`,
+    );
+  }
   const where = filters.length > 0 ? and(...filters) : undefined;
-  const { limit, offset } = toLimitOffset(query);
 
-  const [items, [countRow]] = await Promise.all([
-    db
-      .select(userColumns)
-      .from(users)
-      .where(where)
-      .orderBy(desc(users.createdAt), users.id)
-      .limit(limit)
-      .offset(offset),
-    db.select({ total: sql<number>`count(*)::int` }).from(users).where(where),
-  ]);
+  const rows = await db
+    .select(userColumns)
+    .from(users)
+    .where(where)
+    .orderBy(desc(users.createdAt), desc(users.id))
+    .limit(query.limit + 1);
 
-  return { items, total: countRow?.total ?? 0, page: query.page, pageSize: query.pageSize };
+  const page = keysetPage(rows, query.limit, (r) => ({
+    t: r.createdAt.toISOString(),
+    i: r.id,
+  }));
+  return { items: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore };
 }
 
 export async function getUser(actor: AuthContext, id: string) {

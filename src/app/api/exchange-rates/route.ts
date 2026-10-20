@@ -9,8 +9,8 @@ import { requireActor } from "@/server/auth/actor";
 import { apiHandler, validationFailed } from "@/server/errors";
 
 /**
- * Daftar kurs berpaginasi, terbaru dulu. Filter: ?fromCurrency, ?dateFrom, ?dateTo (YYYY-MM-DD),
- * ?page, ?pageSize. Izin: core.exchange_rates.read
+ * Daftar kurs berpaginasi keyset, terbaru dulu. Filter query: `fromCurrency`, `dateFrom`,
+ * `dateTo` (YYYY-MM-DD), `limit` (1..100, default 20), `cursor` (opaque). Izin: core.exchange_rates.read
  */
 export const GET = apiHandler(async (request: Request) => {
   const actor = await requireActor();
@@ -18,9 +18,12 @@ export const GET = apiHandler(async (request: Request) => {
   const query = listExchangeRatesQuerySchema.parse(
     Object.fromEntries(new URL(request.url).searchParams),
   );
-  const { items, total, page, pageSize } = await listExchangeRates(actor, query);
+  const { items, nextCursor, hasMore } = await listExchangeRates(actor, query);
 
-  return NextResponse.json({ data: items, meta: { total, page, pageSize } });
+  return NextResponse.json({
+    data: items,
+    meta: { limit: query.limit, cursor: query.cursor ?? null, nextCursor, hasMore },
+  });
 });
 
 /**

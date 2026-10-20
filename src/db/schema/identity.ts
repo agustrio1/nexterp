@@ -40,6 +40,10 @@ export const users = pgTable(
     // Menjamin keunikan email tanpa membedakan huruf besar/kecil.
     check("users_email_lowercase_chk", sql`${t.email} = lower(${t.email})`),
     check("users_failed_login_count_chk", sql`${t.failedLoginCount} >= 0`),
+    // Keyset paginasi listUsers (Tahap 10C): urutan kanonik (created_at, id).
+    // PG dapat melakukan backward scan untuk ORDER BY DESC sehingga indeks
+    // ASC default cukup; tiebreaker `id` menjamin determinisme halaman.
+    index("users_created_at_id_idx").on(t.createdAt, t.id),
   ],
 );
 

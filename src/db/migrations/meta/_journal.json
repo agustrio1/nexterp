@@ -232,6 +232,13 @@
       "when": 1792468013810,
       "tag": "0032_familiar_amazoness",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792470931873,
+      "tag": "0033_lush_professor_monster",
+      "breakpoints": true
     }
   ]
 }

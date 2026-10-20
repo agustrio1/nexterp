@@ -102,9 +102,9 @@ describe("enqueuePayrollRunSchema + payrollRunPayloadSchema", () => {
 });
 
 describe("listJobsQuerySchema (query daftar job)", () => {
-  it("default page=1 pageSize=20, tanpa filter", () => {
+  it("default limit=20, tanpa cursor, tanpa filter", () => {
     const q = listJobsQuerySchema.parse({});
-    expect(q).toEqual({ page: 1, pageSize: 20 });
+    expect(q).toEqual({ limit: 20 });
   });
 
   it("filter status harus salah satu JOB_STATUSES", () => {
@@ -123,7 +123,12 @@ describe("listJobsQuerySchema (query daftar job)", () => {
     expect(() => listJobsQuerySchema.parse({ createdBy: "bukan-uuid" })).toThrow();
   });
 
-  it("pageSize > 100 ditolak (paginasi standar proteksi DB)", () => {
-    expect(() => listJobsQuerySchema.parse({ pageSize: "101" })).toThrow();
+  it("limit > 100 ditolak (paginasi keyset proteksi DB)", () => {
+    expect(() => listJobsQuerySchema.parse({ limit: "101" })).toThrow();
+  });
+
+  it("cursor string opaque diterima (keyset 10C)", () => {
+    const q = listJobsQuerySchema.parse({ cursor: "eyJ0IjoieSJ9" });
+    expect(q.cursor).toBe("eyJ0IjoieSJ9");
   });
 });
