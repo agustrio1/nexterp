@@ -19,8 +19,11 @@ export const GET = apiHandler(async (request: Request) => {
   const actor = await requirePermission("core.users.read");
   const query = parseQuery(request, listQuerySchema);
 
-  const result = await listUsers(actor, query);
-  return NextResponse.json(result, { headers: NO_STORE });
+  const { items, nextCursor, hasMore } = await listUsers(actor, query);
+  return NextResponse.json(
+    { data: items, meta: { limit: query.limit, cursor: query.cursor ?? null, nextCursor, hasMore } },
+    { headers: NO_STORE },
+  );
 });
 
 export const POST = apiHandler(async (request: Request) => {

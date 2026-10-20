@@ -19,7 +19,7 @@ type Meta = { limit: number; cursor: string | null; nextCursor: string | null; h
 async function fetchPageData<T>(
   url: string,
   cursor: string | null,
-): Promise<{ data: T[]; meta: Meta }> {
+): Promise<{ data: T[]; meta: Meta | null }> {
   const params = new URLSearchParams();
   if (cursor) params.set("cursor", cursor);
   const sep = url.includes("?") ? "&" : "?";
@@ -30,7 +30,9 @@ async function fetchPageData<T>(
     const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
     throw new Error(body?.error?.message ?? `HTTP ${res.status}`);
   }
-  return (await res.json()) as { data: T[]; meta: Meta };
+  const json = (await res.json()) as { data: T[]; meta?: Meta; items?: T[] };
+  // Normalize: support both { data, meta } and { data } (non-paginated).
+  return { data: json.data ?? json.items ?? [], meta: json.meta ?? null };
 }
 
 export function DataTable<T>({
@@ -142,30 +144,32 @@ export function DataTable<T>({
         </table>
       </div>
 
-      {/* Pagination controls */}
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          {rows.length} baris{meta?.hasMore ? " + berikutnya" : ""}
-        </p>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={prevPage}
-            disabled={cursorHistory.length <= 1 || loading}
-          >
-            <ChevronLeft className="h-4 w-4" /> Prev
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={nextPage}
-            disabled={!meta?.hasMore || loading}
-          >
-            Next <ChevronRight className="h-4 w-4" />
-          </Button>
+      {/* Pagination controls — only shown for paginated responses */}
+      {meta && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            {rows.length} baris{meta.hasMore ? " + berikutnya" : ""}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={prevPage}
+              disabled={cursorHistory.length <= 1 || loading}
+            >
+              <ChevronLeft className="h-4 w-4" /> Prev
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={nextPage}
+              disabled={!meta.hasMore || loading}
+            >
+              Next <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       {loading && rows.length > 0 && (
         <div className="flex justify-center py-2">
