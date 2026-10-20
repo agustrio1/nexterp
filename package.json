@@ -6,18 +6,35 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "bun run src/db/seed/index.ts",
+    "db:seed-coa": "bun run src/db/seed/coa-demo.ts",
+    "db:seed-cost-centers": "bun run src/db/seed/cost-centers-demo.ts",
+    "db:create-admin": "bun run src/db/seed/create-admin.ts",
+    "jobs:worker": "bun run scripts/worker.ts"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "^1.7.9",
+    "@node-rs/argon2": "^2.2.2",
+    "better-auth": "^1.7.9",
+    "decimal.js": "^10.6.0",
+    "drizzle-orm": "^0.45.4",
     "next": "16.4.1",
+    "pg": "^8.23.1",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.4.1",
     "tailwindcss": "^4",

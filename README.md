@@ -34,3 +34,18 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+# 1. Migrasi tabel auth
+bunx drizzle-kit generate --name=auth_tables
+bun run db:migrate
+
+# 2. Buat admin pertama (ganti nilainya; password minimal 12 karakter)
+$env:ADMIN_EMAIL = "admin@erp.com"
+$env:ADMIN_NAME = "Administrator"
+$env:ADMIN_PASSWORD = "Password321!"
+bun run db:create-admin
+Remove-Item Env:ADMIN_EMAIL, Env:ADMIN_NAME, Env:ADMIN_PASSWORD
+
+# 3. Jalankan server
+bun run dev

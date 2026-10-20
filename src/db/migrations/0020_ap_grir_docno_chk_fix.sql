@@ -1,0 +1,4 @@
+ALTER TABLE "ap_payments" DROP CONSTRAINT "ap_payments_docno_chk";--> statement-breakpoint
+ALTER TABLE "supplier_invoices" DROP CONSTRAINT "supplier_invoices_docno_chk";--> statement-breakpoint
+ALTER TABLE "ap_payments" ADD CONSTRAINT "ap_payments_docno_chk" CHECK (("ap_payments"."status" in ('draft', 'cancelled') and "ap_payments"."doc_no" is null) or ("ap_payments"."status" in ('posted', 'reversed') and "ap_payments"."doc_no" is not null));--> statement-breakpoint
+ALTER TABLE "supplier_invoices" ADD CONSTRAINT "supplier_invoices_docno_chk" CHECK (("supplier_invoices"."status" in ('draft', 'cancelled') and "supplier_invoices"."doc_no" is null) or ("supplier_invoices"."status" in ('posted', 'reversed') and "supplier_invoices"."doc_no" is not null));
