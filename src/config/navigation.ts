@@ -19,6 +19,11 @@ import {
   BarChart3,
   Bot,
   Settings,
+  Truck,
+  Receipt,
+  RotateCcw,
+  FileMinus2,
+  Tag,
   type LucideIcon,
 } from "lucide-react";
 
@@ -91,10 +96,16 @@ export const navigationSections: NavSection[] = [
     ],
   },
   {
-    title: "Penjualan & CRM",
+    title: "Penjualan & AR",
     items: [
-      { label: "Pelanggan", href: "/customers", icon: Users, permission: "crm.customer.read" },
-      { label: "Penjualan", href: "/sales", icon: ClipboardList, permission: "sales.order.read" },
+      { label: "Quotation", href: "/sales/quotations", icon: Tag, permission: "sales.quotations.read" },
+      { label: "Sales Order", href: "/sales/sales-orders", icon: ClipboardList, permission: "sales.orders.read" },
+      { label: "Pengiriman", href: "/sales/deliveries", icon: Truck, permission: "sales.deliveries.read" },
+      { label: "Retur Penjualan", href: "/sales/returns", icon: RotateCcw, permission: "sales.returns.read" },
+      { label: "Faktur Penjualan", href: "/sales/invoices", icon: Receipt, permission: "sales.invoices.read" },
+      { label: "Pembayaran Customer", href: "/sales/payments", icon: CreditCard, permission: "sales.payments.read" },
+      { label: "Nota Kredit", href: "/sales/credit-notes", icon: FileMinus2, permission: "sales.credit_notes.read" },
+      { label: "Laporan Penjualan", href: "/sales/reports", icon: BarChart3, permission: "sales.reports.read" },
     ],
   },
   {
