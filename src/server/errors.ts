@@ -2,6 +2,18 @@ import { unstable_rethrow } from "next/navigation";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 
+import { env } from "@/config/env";
+import { db } from "@/server/db";
+import {
+  apiBucket,
+  apiGroupFromPath,
+  appOriginFrom,
+  clientIpFrom,
+  isUnsafeMethod,
+  sameOriginViolation,
+} from "@/server/csrf";
+import { API_UNSAFE_LIMIT_PER_MINUTE, enforceRateLimit } from "@/server/rate-limit";
+
 export type ErrorCode =
   | "UNAUTHENTICATED"
   | "FORBIDDEN"
@@ -127,12 +139,30 @@ export function toErrorResponse(error: unknown, requestId: string = crypto.rando
  *
  * Error internal Next.js (bailout dinamis saat prerender, redirect, notFound bawaan Next)
  * dilempar ulang, bukan dipetakan menjadi respons error.
+ *
+ * Guard keamanan (Tahap 10B), khusus metode tidak aman (POST/PUT/PATCH/DELETE)
+ * dan hanya bila argumen pertama adalah `Request`:
+ *  1) CSRF same-origin — tolak bila Origin/Referer hadir dan beda-origin.
+ *  2) Rate-limit DB — bucket "api:<grup>:<ip>", default 120/menit.
+ * Handler telanjang (mis. `/api/health`) tidak melalui jalur ini dan otomatis lolos.
  */
 export function apiHandler<Args extends unknown[]>(
   handler: (...args: Args) => Promise<Response>,
 ): (...args: Args) => Promise<Response> {
   return async (...args: Args) => {
     try {
+      const first = args[0];
+      if (first instanceof Request && isUnsafeMethod(first.method)) {
+        const violation = sameOriginViolation(first.headers, appOriginFrom(env.APP_URL));
+        if (violation) {
+          // Alasan hanya masuk log server (berisi origin klien); klien dapat pesan umum.
+          console.warn(`[csrf] ditolak method=${first.method} ${violation}`);
+          throw forbidden("Asal permintaan tidak dikenali.");
+        }
+        const group = apiGroupFromPath(new URL(first.url).pathname);
+        const ip = clientIpFrom(first.headers);
+        await enforceRateLimit(db, apiBucket(group, ip), API_UNSAFE_LIMIT_PER_MINUTE);
+      }
       return await handler(...args);
     } catch (error) {
       unstable_rethrow(error);

@@ -9,7 +9,7 @@ import { findExportEntry } from "@/modules/reporting/export-catalog";
 import { toLimitOffset } from "@/server/validation";
 import { can, type AuthContext, type PermissionCode } from "@/server/authz";
 
-import { assertCan, inTx, lockJob, requireJob, type Tx } from "./_refs";
+import { assertCan, inTx, lockJob, requireJobForActor, type Tx } from "./_refs";
 import { JOB_HANDLERS, type JobOutcome } from "./handlers";
 import type {
   EnqueueExportInput,
@@ -208,6 +208,15 @@ export async function listJobs(actor: AuthContext, query: ListJobsQuery, externa
   const reader = externalTx ?? db;
   const { limit, offset } = toLimitOffset(query);
 
+  // Tahap 10B (IDOR): tanpa `exports.manage`, daftar difaksakan ke job milik sendiri;
+  // filter lintas-pengguna dari query diabaikan. Admin tetap boleh memfilter bebas.
+  const isManager = can(actor.grants, "reporting.exports.manage");
+  const ownerFilter = isManager
+    ? query.createdBy
+      ? eq(jobRuns.createdBy, query.createdBy)
+      : undefined
+    : eq(jobRuns.createdBy, actor.userId);
+
   const rows = await reader
     .select(listColumns)
     .from(jobRuns)
@@ -215,7 +224,7 @@ export async function listJobs(actor: AuthContext, query: ListJobsQuery, externa
       and(
         query.status ? eq(jobRuns.status, query.status) : undefined,
         query.type ? eq(jobRuns.type, query.type) : undefined,
-        query.createdBy ? eq(jobRuns.createdBy, query.createdBy) : undefined,
+        ownerFilter,
       ),
     )
     .orderBy(desc(jobRuns.createdAt), desc(jobRuns.id))
@@ -228,14 +237,14 @@ export async function listJobs(actor: AuthContext, query: ListJobsQuery, externa
 export async function getJob(actor: AuthContext, id: string, externalTx?: Tx) {
   assertCan(actor, "reporting.exports.read");
   const reader = externalTx ?? db;
-  return summarize(await requireJob(reader, id));
+  return summarize(await requireJobForActor(reader, actor, id));
 }
 
 /** Unduh artefak CSV. Hanya tersedia bila job selesai dan barisnya menyimpan artefak. */
 export async function getJobArtifact(actor: AuthContext, id: string, externalTx?: Tx) {
   assertCan(actor, "reporting.exports.read");
   const reader = externalTx ?? db;
-  const job = await requireJob(reader, id);
+  const job = await requireJobForActor(reader, actor, id);
   if (!job.artifactText || !job.contentType || !job.fileName) {
     throw businessRule("Artefak ekspor belum tersedia untuk job ini.");
   }

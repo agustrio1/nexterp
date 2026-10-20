@@ -304,3 +304,22 @@ export const outboxEvents = pgTable(
     check("outbox_events_attempts_chk", sql`${t.attempts} >= 0`),
   ],
 );
+
+/**
+ * Rate-limit API lintas-instance (fixed window 1 menit per bucket).
+ * Ditegakkan di `apiHandler` via upsert atomik; baris kedaluwarsa dibersihkan best-effort.
+ * `key` = bucket (mis. "api:journals:1.2.3.4"). PK text cukup; indeks windowStart untuk cleanup.
+ */
+export const apiRateLimits = pgTable(
+  "api_rate_limits",
+  {
+    key: text().notNull(),
+    windowStart: timestamptz().notNull(),
+    count: integer().notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.key] }),
+    index("api_rate_limits_window_idx").on(t.windowStart),
+    check("api_rate_limits_count_chk", sql`${t.count} >= 0`),
+  ],
+);

@@ -26,6 +26,18 @@ export async function requireJob(reader: Reader, id: string) {
   return row;
 }
 
+/**
+ * Muat job + paksa kepemilikan (Tahap 10B — tutup IDOR artefak ekspor).
+ * Akses hanya bila pembuat ATAU pemegang `reporting.exports.manage` (override admin).
+ * Non-kreator tanpa manage -> 403. Pemanggil tetap wajib `assertCan(read)` lebih dulu.
+ */
+export async function requireJobForActor(reader: Reader, actor: AuthContext, id: string) {
+  const job = await requireJob(reader, id);
+  if (job.createdBy === actor.userId) return job;
+  if (can(actor.grants, "reporting.exports.manage")) return job;
+  throw forbidden();
+}
+
 /** Kunci baris job FOR UPDATE — transisi state (claim/cancel) harus serial. */
 export async function lockJob(tx: Tx, id: string) {
   const [row] = await tx

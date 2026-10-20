@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 
-import { env } from "@/config/env";
+import { env, isProduction } from "@/config/env";
 import * as schema from "@/db/schema";
 import { db } from "@/server/db";
 
@@ -77,6 +77,16 @@ export const auth = betterAuth({
   advanced: {
     database: { generateId: "uuid" },
     cookiePrefix: "erp",
+    // Tahap 10B: cookie sesi `lax` (top-level navigation tetap jalan; POST lintas-site
+    // tidak mengirim cookie -> lapisan CSRF di `apiHandler` tetap berlapis) dan
+    // `secure` auto di produksi. `__Host-`/`__Secure-` prefix tidak dipakai agar
+    // dev-mode tanpa HTTPS tetap dapat cookie.
+    cookie: {
+      sameSite: "lax",
+      secure: isProduction,
+      httpOnly: true,
+      path: "/",
+    },
   },
 
   hooks: {
