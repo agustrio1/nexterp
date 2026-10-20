@@ -64,10 +64,11 @@ export const navigationSections: NavSection[] = [
   {
     title: "Akuntansi",
     items: [
-      { label: "Bagan Akun", href: "/chart-of-accounts", icon: BookOpen, permission: "accounting.coa.read" },
-      { label: "Jurnal", href: "/journal-entries", icon: FileText, permission: "accounting.journal.read" },
-      { label: "Buku Besar", href: "/general-ledger", icon: Landmark, permission: "accounting.ledger.read" },
-      { label: "Laporan Keuangan", href: "/reports", icon: BarChart3, permission: "accounting.report.read" },
+      { label: "Bagan Akun", href: "/chart-of-accounts", icon: BookOpen, permission: "accounting.accounts.read" },
+      { label: "Jurnal", href: "/journal-entries", icon: FileText, permission: "accounting.journals.read" },
+      { label: "Buku Besar", href: "/general-ledger", icon: Landmark, permission: "accounting.reports.read" },
+      { label: "Laporan Keuangan", href: "/reports", icon: BarChart3, permission: "accounting.reports.read" },
+      { label: "Saldo Awal", href: "/opening-balance", icon: Coins, permission: "accounting.opening.manage" },
     ],
   },
   {

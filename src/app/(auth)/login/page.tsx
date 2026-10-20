@@ -78,7 +78,7 @@ export default function LoginPage() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                placeholder="admin@erp.local"
+                placeholder="admin@erp.com"
                 className="pl-9"
                 aria-invalid={!!errors.email}
                 {...register("email")}
