@@ -162,7 +162,15 @@ export const navigationSections: NavSection[] = [
   {
     title: "Payroll",
     items: [
-      { label: "Gaji", href: "/payroll", icon: CreditCard, permission: "payroll.run.read" },
+      { label: "Run Payroll", href: "/payroll/runs", icon: ClipboardList, permission: "payroll.runs.read" },
+      { label: "Periode Payroll", href: "/payroll/periods", icon: Calendar, permission: "payroll.periods.read" },
+      { label: "Payroll Saya", href: "/payroll/me", icon: UserRound, permission: "payroll.self.payslip" },
+      { label: "Komponen Gaji", href: "/payroll/components", icon: ListChecks, permission: "payroll.components.read" },
+      { label: "Struktur Gaji", href: "/payroll/structures", icon: BookOpen, permission: "payroll.structures.read" },
+      { label: "Kompensasi Karyawan", href: "/payroll/compensations", icon: Coins, permission: "payroll.structures.read" },
+      { label: "Aturan Statutory", href: "/payroll/statutory", icon: Landmark, permission: "payroll.statutory.read" },
+      { label: "Penyesuaian Gaji", href: "/payroll/adjustments", icon: Settings, permission: "payroll.adjustments.read" },
+      { label: "Slip Gaji", href: "/payroll/payslips", icon: Receipt, permission: "payroll.payslips.read" },
     ],
   },
   {
