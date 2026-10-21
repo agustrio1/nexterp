@@ -9,6 +9,7 @@ import {
   Coins,
   ScrollText,
   BookOpen,
+  Wallet,
   FileText,
   Warehouse,
   ShoppingCart,
@@ -93,6 +94,15 @@ export const navigationSections: NavSection[] = [
       { label: "Buku Besar", href: "/general-ledger", icon: Landmark, permission: "accounting.reports.read" },
       { label: "Laporan Keuangan", href: "/reports", icon: BarChart3, permission: "accounting.reports.read" },
       { label: "Saldo Awal", href: "/opening-balance", icon: Coins, permission: "accounting.opening.manage" },
+    ],
+  },
+  {
+    title: "Kas & Bank",
+    items: [
+      { label: "Rekening Kas & Bank", href: "/treasury/bank-accounts", icon: Wallet, permission: "accounting.bank_accounts.read" },
+      { label: "Transaksi Kas", href: "/treasury/cash-transactions", icon: Coins, permission: "accounting.cash_transactions.read" },
+      { label: "Mutasi Bank", href: "/treasury/statements", icon: ScrollText, permission: "accounting.bank_reconciliations.read" },
+      { label: "Rekonsiliasi Bank", href: "/treasury/reconciliations", icon: Landmark, permission: "accounting.bank_reconciliations.read" },
     ],
   },
   {
