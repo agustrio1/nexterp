@@ -45,6 +45,8 @@ import {
   FolderClosed,
   Star,
   GraduationCap,
+  FileCheck,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 
@@ -209,6 +211,13 @@ export const navigationSections: NavSection[] = [
     title: "Proyek",
     items: [
       { label: "Daftar Proyek", href: "/projects", icon: Briefcase, permission: "projects.master.read" },
+    ],
+  },
+  {
+    title: "Persetujuan",
+    items: [
+      { label: "Pengajuan Saya & Menunggu", href: "/approvals/requests", icon: Inbox, permission: "core.approvals.read" },
+      { label: "Alur Persetujuan", href: "/approvals/workflows", icon: FileCheck, permission: "core.approval_workflows.read" },
     ],
   },
   {
