@@ -18,7 +18,6 @@ export default function ProductsPage() {
   if (search) params.set("search", search);
   const qs = params.toString();
   const url = qs ? `/api/products?${qs}` : "/api/products";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   const columns: Column<Product>[] = [
     { header: "SKU", cell: (p) => <code className="text-xs font-mono">{p.sku}</code> },
@@ -51,7 +50,7 @@ export default function ProductsPage() {
           <Input placeholder="Cari SKU / nama…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") setRefreshKey((k) => k + 1); }} onBlur={() => setRefreshKey((k) => k + 1)} />
         </div>
       </div>
-      <DataTable<Product> key={refreshKey} url={fetchUrl} columns={columns} rowKey={(p) => p.id} emptyMessage="Belum ada produk." />
+      <DataTable<Product> key={refreshKey} url={url} columns={columns} rowKey={(p) => p.id} emptyMessage="Belum ada produk." />
     </div>
   );
 }

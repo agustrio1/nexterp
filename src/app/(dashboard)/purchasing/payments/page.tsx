@@ -33,7 +33,6 @@ export default function PaymentsPage() {
   if (supplierId) params.set("supplierId", supplierId);
   const qs = params.toString();
   const url = qs ? `/api/purchasing/payments?${qs}` : "/api/purchasing/payments";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   const supplierName = (id: string) => { const s = suppliers.find((x) => x.id === id); return s ? `${s.code} — ${s.name}` : id.slice(0, 8); };
 
@@ -62,7 +61,7 @@ export default function PaymentsPage() {
           <option value="">Semua pemasok</option>{suppliers.map((s) => (<option key={s.id} value={s.id}>{s.code} — {s.name}</option>))}
         </Select>
       </div>
-      <DataTable<Payment> key={refreshKey} url={fetchUrl} columns={columns} rowKey={(p) => p.id} emptyMessage="Belum ada pembayaran AP." />
+      <DataTable<Payment> key={refreshKey} url={url} columns={columns} rowKey={(p) => p.id} emptyMessage="Belum ada pembayaran AP." />
     </div>
   );
 }

@@ -40,7 +40,6 @@ export default function JournalEntriesPage() {
   params.set("limit", "50");
   const qs = params.toString();
   const url = `/api/journals?${qs}`;
-  const fetchUrl = `${url}&_r=${refreshKey}`;
 
   const columns: Column<Journal>[] = [
     {
@@ -111,7 +110,7 @@ export default function JournalEntriesPage() {
 
       <DataTable<Journal>
         key={refreshKey}
-        url={fetchUrl}
+        url={url}
         columns={columns}
         rowKey={(j) => j.id}
         emptyMessage="Belum ada jurnal."

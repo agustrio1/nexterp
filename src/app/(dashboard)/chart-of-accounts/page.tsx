@@ -37,7 +37,6 @@ export default function ChartOfAccountsPage() {
   if (isActive) params.set("isActive", isActive);
   const qs = params.toString();
   const url = qs ? `/api/chart-accounts?${qs}` : "/api/chart-accounts";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   const columns: Column<Account>[] = [
     { header: "Kode", cell: (a) => <code className="text-xs font-mono">{a.code}</code> },
@@ -123,7 +122,7 @@ export default function ChartOfAccountsPage() {
 
       <DataTable<Account>
         key={refreshKey}
-        url={fetchUrl}
+        url={url}
         columns={columns}
         rowKey={(a) => a.id}
         emptyMessage="Belum ada akun."

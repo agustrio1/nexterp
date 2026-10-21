@@ -35,7 +35,6 @@ export default function QuotationsPage() {
   if (customerId) params.set("customerId", customerId);
   const qs = params.toString();
   const url = qs ? `/api/sales/quotations?${qs}` : "/api/sales/quotations";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   const customerName = (id: string) => {
     const c = customers.find((x) => x.id === id);
@@ -67,7 +66,7 @@ export default function QuotationsPage() {
           <option value="">Semua pelanggan</option>{customers.map((c) => (<option key={c.id} value={c.id}>{c.code} — {c.accountName}</option>))}
         </Select>
       </div>
-      <DataTable<Quotation> key={refreshKey} url={fetchUrl} columns={columns} rowKey={(q) => q.id} emptyMessage="Belum ada quotation." />
+      <DataTable<Quotation> key={refreshKey} url={url} columns={columns} rowKey={(q) => q.id} emptyMessage="Belum ada quotation." />
     </div>
   );
 }

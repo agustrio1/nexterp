@@ -23,7 +23,6 @@ export default function UsersPage() {
   if (status) params.set("status", status);
   const qs = params.toString();
   const url = qs ? `/api/users?${qs}` : "/api/users";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   async function toggleStatus(user: User) {
     const newStatus = user.status === "active" ? "suspended" : "active";
@@ -118,7 +117,7 @@ export default function UsersPage() {
 
       <DataTable<User>
         key={refreshKey}
-        url={fetchUrl}
+        url={url}
         columns={columns}
         rowKey={(u) => u.id}
         emptyMessage="Belum ada pengguna."

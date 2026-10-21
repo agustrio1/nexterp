@@ -33,7 +33,6 @@ export default function InvoicesPage() {
   if (supplierId) params.set("supplierId", supplierId);
   const qs = params.toString();
   const url = qs ? `/api/purchasing/invoices?${qs}` : "/api/purchasing/invoices";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   const supplierName = (id: string) => { const s = suppliers.find((x) => x.id === id); return s ? `${s.code} — ${s.name}` : id.slice(0, 8); };
 
@@ -62,7 +61,7 @@ export default function InvoicesPage() {
           <option value="">Semua pemasok</option>{suppliers.map((s) => (<option key={s.id} value={s.id}>{s.code} — {s.name}</option>))}
         </Select>
       </div>
-      <DataTable<Invoice> key={refreshKey} url={fetchUrl} columns={columns} rowKey={(i) => i.id} emptyMessage="Belum ada invoice pemasok." />
+      <DataTable<Invoice> key={refreshKey} url={url} columns={columns} rowKey={(i) => i.id} emptyMessage="Belum ada invoice pemasok." />
     </div>
   );
 }

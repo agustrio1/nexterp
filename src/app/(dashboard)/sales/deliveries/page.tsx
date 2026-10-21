@@ -33,7 +33,6 @@ export default function DeliveriesPage() {
   if (customerId) params.set("customerId", customerId);
   const qs = params.toString();
   const url = qs ? `/api/sales/deliveries?${qs}` : "/api/sales/deliveries";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   const customerName = (id: string) => { const c = customers.find((x) => x.id === id); return c ? `${c.code} — ${c.accountName}` : id.slice(0, 8); };
 
@@ -59,7 +58,7 @@ export default function DeliveriesPage() {
           <option value="">Semua pelanggan</option>{customers.map((c) => (<option key={c.id} value={c.id}>{c.code} — {c.accountName}</option>))}
         </Select>
       </div>
-      <DataTable<Delivery> key={refreshKey} url={fetchUrl} columns={columns} rowKey={(d) => d.id} emptyMessage="Belum ada pengiriman." />
+      <DataTable<Delivery> key={refreshKey} url={url} columns={columns} rowKey={(d) => d.id} emptyMessage="Belum ada pengiriman." />
     </div>
   );
 }

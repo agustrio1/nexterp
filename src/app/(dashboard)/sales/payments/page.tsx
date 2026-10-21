@@ -33,7 +33,6 @@ export default function SalesPaymentsPage() {
   if (customerId) params.set("customerId", customerId);
   const qs = params.toString();
   const url = qs ? `/api/sales/payments?${qs}` : "/api/sales/payments";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   const customerName = (id: string) => { const c = customers.find((x) => x.id === id); return c ? `${c.code} — ${c.accountName}` : id.slice(0, 8); };
 
@@ -62,7 +61,7 @@ export default function SalesPaymentsPage() {
           <option value="">Semua pelanggan</option>{customers.map((c) => (<option key={c.id} value={c.id}>{c.code} — {c.accountName}</option>))}
         </Select>
       </div>
-      <DataTable<Payment> key={refreshKey} url={fetchUrl} columns={columns} rowKey={(p) => p.id} emptyMessage="Belum ada pembayaran customer." />
+      <DataTable<Payment> key={refreshKey} url={url} columns={columns} rowKey={(p) => p.id} emptyMessage="Belum ada pembayaran customer." />
     </div>
   );
 }

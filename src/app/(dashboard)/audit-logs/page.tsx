@@ -16,7 +16,7 @@ export default function AuditLogsPage() {
   if (actionPrefix) params.set("actionPrefix", actionPrefix);
   params.set("limit", "50");
   const qs = params.toString();
-  const url = `/api/audit-logs?${qs}&_r=${refreshKey}`;
+  const url = `/api/audit-logs?${qs}`;
 
   const columns: Column<Log>[] = [
     { header: "Waktu", cell: (r) => <span className="whitespace-nowrap text-xs">{new Date(r.at).toLocaleString("id-ID")}</span> },

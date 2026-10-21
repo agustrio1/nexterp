@@ -33,7 +33,6 @@ export default function CreditNotesPage() {
   if (customerId) params.set("customerId", customerId);
   const qs = params.toString();
   const url = qs ? `/api/sales/credit-notes?${qs}` : "/api/sales/credit-notes";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   const customerName = (id: string) => { const c = customers.find((x) => x.id === id); return c ? `${c.code} — ${c.accountName}` : id.slice(0, 8); };
 
@@ -62,7 +61,7 @@ export default function CreditNotesPage() {
           <option value="">Semua pelanggan</option>{customers.map((c) => (<option key={c.id} value={c.id}>{c.code} — {c.accountName}</option>))}
         </Select>
       </div>
-      <DataTable<CreditNote> key={refreshKey} url={fetchUrl} columns={columns} rowKey={(r) => r.id} emptyMessage="Belum ada nota kredit." />
+      <DataTable<CreditNote> key={refreshKey} url={url} columns={columns} rowKey={(r) => r.id} emptyMessage="Belum ada nota kredit." />
     </div>
   );
 }

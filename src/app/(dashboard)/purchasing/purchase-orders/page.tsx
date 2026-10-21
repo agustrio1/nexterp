@@ -34,7 +34,6 @@ export default function PurchaseOrdersPage() {
   if (supplierId) params.set("supplierId", supplierId);
   const qs = params.toString();
   const url = qs ? `/api/purchasing/purchase-orders?${qs}` : "/api/purchasing/purchase-orders";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   const supplierName = (id: string) => {
     const s = suppliers.find((x) => x.id === id);
@@ -66,7 +65,7 @@ export default function PurchaseOrdersPage() {
           <option value="">Semua pemasok</option>{suppliers.map((s) => (<option key={s.id} value={s.id}>{s.code} — {s.name}</option>))}
         </Select>
       </div>
-      <DataTable<PO> key={refreshKey} url={fetchUrl} columns={columns} rowKey={(p) => p.id} emptyMessage="Belum ada purchase order." />
+      <DataTable<PO> key={refreshKey} url={url} columns={columns} rowKey={(p) => p.id} emptyMessage="Belum ada purchase order." />
     </div>
   );
 }

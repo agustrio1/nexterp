@@ -34,7 +34,6 @@ export default function SalesOrdersPage() {
   if (customerId) params.set("customerId", customerId);
   const qs = params.toString();
   const url = qs ? `/api/sales/sales-orders?${qs}` : "/api/sales/sales-orders";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   const customerName = (id: string) => { const c = customers.find((x) => x.id === id); return c ? `${c.code} — ${c.accountName}` : id.slice(0, 8); };
 
@@ -63,7 +62,7 @@ export default function SalesOrdersPage() {
           <option value="">Semua pelanggan</option>{customers.map((c) => (<option key={c.id} value={c.id}>{c.code} — {c.accountName}</option>))}
         </Select>
       </div>
-      <DataTable<SO> key={refreshKey} url={fetchUrl} columns={columns} rowKey={(s) => s.id} emptyMessage="Belum ada sales order." />
+      <DataTable<SO> key={refreshKey} url={url} columns={columns} rowKey={(s) => s.id} emptyMessage="Belum ada sales order." />
     </div>
   );
 }

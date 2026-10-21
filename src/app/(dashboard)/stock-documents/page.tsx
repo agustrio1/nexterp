@@ -22,7 +22,6 @@ export default function StockDocumentsPage() {
   if (status) params.set("status", status);
   const qs = params.toString();
   const url = qs ? `/api/stock-documents?${qs}` : "/api/stock-documents";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   const columns: Column<Doc>[] = [
     { header: "No. Dok", cell: (d) => d.docNo ? <code className="text-xs font-mono">{d.docNo}</code> : <span className="text-zinc-400">draft</span> },
@@ -51,7 +50,7 @@ export default function StockDocumentsPage() {
           <option value="">Semua status</option><option value="draft">Draft</option><option value="posted">Posted</option><option value="reversed">Reversed</option><option value="cancelled">Cancelled</option>
         </Select>
       </div>
-      <DataTable<Doc> key={refreshKey} url={fetchUrl} columns={columns} rowKey={(d) => d.id} emptyMessage="Belum ada dokumen stok." />
+      <DataTable<Doc> key={refreshKey} url={url} columns={columns} rowKey={(d) => d.id} emptyMessage="Belum ada dokumen stok." />
     </div>
   );
 }

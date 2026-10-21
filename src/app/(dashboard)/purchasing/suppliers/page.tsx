@@ -19,7 +19,6 @@ export default function SuppliersPage() {
   if (applied) params.set("search", applied);
   const qs = params.toString();
   const url = qs ? `/api/purchasing/suppliers?${qs}` : "/api/purchasing/suppliers";
-  const fetchUrl = `${url}${url.includes("?") ? "&" : "?"}_r=${refreshKey}`;
 
   const columns: Column<Supplier>[] = [
     { header: "Kode", cell: (s) => <code className="text-xs font-mono">{s.code}</code> },
@@ -46,7 +45,7 @@ export default function SuppliersPage() {
         <Input className="w-64" placeholder="Cari kode / nama…" value={search} onChange={(e) => setSearch(e.target.value)} />
         <Button type="submit" variant="outline" size="sm">Cari</Button>
       </form>
-      <DataTable<Supplier> key={refreshKey} url={fetchUrl} columns={columns} rowKey={(s) => s.id} emptyMessage="Belum ada pemasok." />
+      <DataTable<Supplier> key={refreshKey} url={url} columns={columns} rowKey={(s) => s.id} emptyMessage="Belum ada pemasok." />
     </div>
   );
 }

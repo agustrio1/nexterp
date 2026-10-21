@@ -25,7 +25,7 @@ async function fetchPageData<T>(
   const sep = url.includes("?") ? "&" : "?";
   const qs = params.toString();
   const fullUrl = qs ? `${url}${sep}${qs}` : url;
-  const res = await fetch(fullUrl, { credentials: "same-origin" });
+  const res = await fetch(fullUrl, { credentials: "same-origin", cache: "no-store" });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
     throw new Error(body?.error?.message ?? `HTTP ${res.status}`);
