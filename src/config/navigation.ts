@@ -174,10 +174,20 @@ export const navigationSections: NavSection[] = [
     ],
   },
   {
-    title: "Aset & Proyek",
+    title: "Aset Tetap",
     items: [
-      { label: "Aset Tetap", href: "/assets", icon: Package, permission: "assets.asset.read" },
-      { label: "Proyek", href: "/projects", icon: Briefcase, permission: "projects.project.read" },
+      { label: "Register Aset", href: "/assets/register", icon: Package, permission: "assets.register.read" },
+      { label: "Kategori Aset", href: "/assets/categories", icon: Tags, permission: "assets.categories.read" },
+      { label: "Akuisisi Aset", href: "/assets/acquisitions", icon: ShoppingCart, permission: "assets.acquisitions.read" },
+      { label: "Run Penyusutan", href: "/assets/depreciation", icon: Timer, permission: "assets.depreciation.read" },
+      { label: "Pelepasan Aset", href: "/assets/disposals", icon: FileMinus2, permission: "assets.disposal.read" },
+      { label: "Revaluasi Aset", href: "/assets/revaluations", icon: RotateCcw, permission: "assets.register.read" },
+    ],
+  },
+  {
+    title: "Proyek",
+    items: [
+      { label: "Daftar Proyek", href: "/projects", icon: Briefcase, permission: "projects.master.read" },
     ],
   },
   {
