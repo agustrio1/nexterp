@@ -34,6 +34,15 @@ import {
   Layers,
   UserCog,
   Tags,
+  UserRound,
+  Clock,
+  CalendarCheck,
+  CalendarDays,
+  Timer,
+  FileSignature,
+  FolderClosed,
+  Star,
+  GraduationCap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -135,9 +144,24 @@ export const navigationSections: NavSection[] = [
     ],
   },
   {
-    title: "HR & Payroll",
+    title: "SDM",
     items: [
-      { label: "Karyawan", href: "/employees", icon: Users, permission: "hr.employee.read" },
+      { label: "Karyawan", href: "/hr/employees", icon: Users, permission: "hr.employees.read" },
+      { label: "HR Saya", href: "/hr/me", icon: UserRound, permission: "hr.self.view" },
+      { label: "Jabatan", href: "/hr/positions", icon: Briefcase, permission: "hr.positions.read" },
+      { label: "Shift", href: "/hr/shifts", icon: Clock, permission: "hr.shifts.read" },
+      { label: "Absensi", href: "/hr/attendance", icon: CalendarCheck, permission: "hr.attendance.read" },
+      { label: "Cuti", href: "/hr/leaves", icon: CalendarDays, permission: "hr.leaves.read" },
+      { label: "Lembur", href: "/hr/overtime", icon: Timer, permission: "hr.overtime.read" },
+      { label: "Kontrak", href: "/hr/contracts", icon: FileSignature, permission: "hr.contracts.read" },
+      { label: "Dokumen Karyawan", href: "/hr/documents", icon: FolderClosed, permission: "hr.documents.read" },
+      { label: "Evaluasi Kinerja", href: "/hr/evaluations", icon: Star, permission: "hr.evaluations.read" },
+      { label: "Pelatihan", href: "/hr/training", icon: GraduationCap, permission: "hr.training.read" },
+    ],
+  },
+  {
+    title: "Payroll",
+    items: [
       { label: "Gaji", href: "/payroll", icon: CreditCard, permission: "payroll.run.read" },
     ],
   },
