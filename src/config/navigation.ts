@@ -63,7 +63,7 @@ export const navigationSections: NavSection[] = [
   {
     title: "Utama",
     items: [
-      { label: "Dashboard", href: "/", icon: LayoutDashboard },
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     ],
   },
   {
@@ -193,7 +193,7 @@ export const navigationSections: NavSection[] = [
   {
     title: "AI",
     items: [
-      { label: "Asisten AI", href: "/ai-assistant", icon: Bot, permission: "ai.chat" },
+      { label: "Asisten AI", href: "/ai-assistant", icon: Bot, permission: "ai.assistant.use" },
     ],
   },
 ];
