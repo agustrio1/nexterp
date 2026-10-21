@@ -18,6 +18,7 @@ import {
   CreditCard,
   Landmark,
   BarChart3,
+  Calculator,
   Bot,
   Settings,
   Truck,
@@ -103,6 +104,16 @@ export const navigationSections: NavSection[] = [
       { label: "Transaksi Kas", href: "/treasury/cash-transactions", icon: Coins, permission: "accounting.cash_transactions.read" },
       { label: "Mutasi Bank", href: "/treasury/statements", icon: ScrollText, permission: "accounting.bank_reconciliations.read" },
       { label: "Rekonsiliasi Bank", href: "/treasury/reconciliations", icon: Landmark, permission: "accounting.bank_reconciliations.read" },
+    ],
+  },
+  {
+    title: "Anggaran & Pajak",
+    items: [
+      { label: "Anggaran", href: "/budgets", icon: Target, permission: "accounting.budgets.read" },
+      { label: "Pusat Biaya", href: "/cost-centers", icon: Briefcase, permission: "accounting.cost_centers.read" },
+      { label: "Master Pajak", href: "/taxes", icon: Calculator, permission: "accounting.taxes.read" },
+      { label: "Transaksi Pajak", href: "/taxes/transactions", icon: Receipt, permission: "accounting.tax_transactions.read" },
+      { label: "Penutupan Tahun", href: "/closing", icon: Calendar, permission: "accounting.journals.read" },
     ],
   },
   {
