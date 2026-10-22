@@ -15,6 +15,7 @@
     "db:seed": "bun run src/db/seed/index.ts",
     "db:seed-coa": "bun run src/db/seed/coa-demo.ts",
     "db:seed-cost-centers": "bun run src/db/seed/cost-centers-demo.ts",
+    "db:seed:demo": "bun run src/db/seed/demo.ts",
     "db:create-admin": "bun run src/db/seed/create-admin.ts",
     "jobs:worker": "bun run scripts/worker.ts"
   },
