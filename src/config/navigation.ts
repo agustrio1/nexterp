@@ -47,6 +47,9 @@ import {
   GraduationCap,
   FileCheck,
   Inbox,
+  Ruler,
+  ArrowLeftRight,
+  MapPin,
   type LucideIcon,
 } from "lucide-react";
 
@@ -125,6 +128,9 @@ export const navigationSections: NavSection[] = [
       { label: "Gudang", href: "/warehouses", icon: Warehouse, permission: "inventory.warehouses.read" },
       { label: "Dokumen Stok", href: "/stock-documents", icon: ClipboardList, permission: "inventory.documents.read" },
       { label: "Laporan Persediaan", href: "/inventory-reports", icon: BarChart3, permission: "inventory.stock.read" },
+      { label: "Satuan", href: "/units", icon: Ruler, permission: "inventory.units.read" },
+      { label: "Konversi Satuan", href: "/unit-conversions", icon: ArrowLeftRight, permission: "inventory.units.read" },
+      { label: "Lokasi Gudang", href: "/warehouse-locations", icon: MapPin, permission: "inventory.warehouses.read" },
     ],
   },
   {
@@ -211,6 +217,12 @@ export const navigationSections: NavSection[] = [
     title: "Proyek",
     items: [
       { label: "Daftar Proyek", href: "/projects", icon: Briefcase, permission: "projects.master.read" },
+    ],
+  },
+  {
+    title: "Operasional",
+    items: [
+      { label: "Monitor Job", href: "/jobs", icon: Activity, permission: "reporting.exports.read" },
     ],
   },
   {
