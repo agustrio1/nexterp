@@ -16,7 +16,13 @@ const postgresUrl = z
 
 const serverSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  APP_URL: z.url().default("http://localhost:3000"),
+  // Origin publik aplikasi. Bila tidak diset, otomatis dideteksi dari
+  // environment Vercel (URL produksi deployment) agar validasi origin/CSRF
+  // tetap benar di hosting; fallback hanya untuk development lokal.
+  APP_URL: z.url().optional(),
+  VERCEL: z.string().optional(),
+  VERCEL_URL: z.string().optional(),
+  VERCEL_PROJECT_PRODUCTION_URL: z.string().optional(),
   APP_TIMEZONE: z.string().min(1).default("Asia/Jakarta"),
 
   DATABASE_URL: postgresUrl,
@@ -39,7 +45,32 @@ const serverSchema = z.object({
   SENTRY_DSN: z.string().min(1).optional(),
 });
 
-export type Env = z.infer<typeof serverSchema>;
+export type Env = Omit<z.infer<typeof serverSchema>, "APP_URL"> & { APP_URL: string };
+
+/** `https://<host>` dari hostname Vercel; undefined bila tidak ada. */
+function vercelOrigin(host: string | undefined): string | undefined {
+  return host ? `https://${host}` : undefined;
+}
+
+/**
+ * Semua origin deployment Vercel (produksi + preview/URL institusional)
+ * untuk `trustedOrigins` Better Auth. Kosong di luar Vercel.
+ */
+export function trustedOrigins(): string[] {
+  return [
+    vercelOrigin(process.env.VERCEL_PROJECT_PRODUCTION_URL),
+    vercelOrigin(process.env.VERCEL_URL),
+  ].filter((o): o is string => !!o);
+}
+
+function resolveAppUrl(raw: z.infer<typeof serverSchema>): string {
+  return (
+    raw.APP_URL ??
+    vercelOrigin(raw.VERCEL_PROJECT_PRODUCTION_URL) ??
+    vercelOrigin(raw.VERCEL_URL) ??
+    "http://localhost:3000"
+  );
+}
 
 function loadEnv(): Env {
   if (process.env.SKIP_ENV_VALIDATION) {
@@ -60,7 +91,7 @@ function loadEnv(): Env {
     throw new Error(`Konfigurasi environment tidak valid:\n${details}`);
   }
 
-  return parsed.data;
+  return { ...parsed.data, APP_URL: resolveAppUrl(parsed.data) };
 }
 
 export const env: Env = loadEnv();

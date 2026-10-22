@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 
-import { env, isProduction } from "@/config/env";
+import { env, isProduction, trustedOrigins as vercelTrustedOrigins } from "@/config/env";
 import * as schema from "@/db/schema";
 import { db } from "@/server/db";
 
@@ -24,7 +24,9 @@ export const auth = betterAuth({
   appName: "ERP",
   baseURL: env.APP_URL,
   secret: env.BETTER_AUTH_SECRET,
-  trustedOrigins: [env.APP_URL],
+  // APP_URL + seluruh origin deployment Vercel (produksi & preview) agar
+  // validasi origin Better Auth tidak 403 saat diakses dari domain hosting.
+  trustedOrigins: [...new Set([env.APP_URL, ...vercelTrustedOrigins()])],
 
   database: drizzleAdapter(db, {
     provider: "pg",
