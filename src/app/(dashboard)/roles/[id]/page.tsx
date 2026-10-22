@@ -18,23 +18,48 @@ const editSchema = z.object({
 });
 type EditForm = z.input<typeof editSchema>;
 
+type PermGroup = { module: string; permissions: { code: string; description: string | null }[] };
+
+async function readError(res: Response): Promise<string> {
+  const j = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+  return j?.error?.message ?? `Gagal (${res.status}).`;
+}
+
 export default function EditRolePage() {
   const { id } = useParams<{ id: string }>();
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<{ code: string; name: string; description: string | null; permissions: string[] } | null>(null);
+
+  // Katalog permission + permission yang dimiliki actor saat ini (untuk SoD grant).
+  const [catalog, setCatalog] = useState<PermGroup[]>([]);
+  const [myPerms, setMyPerms] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [savingPerms, setSavingPerms] = useState(false);
+
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
     useForm<EditForm>({ resolver: zodResolver(editSchema) });
 
   useEffect(() => {
     if (!id) return;
-    fetch(`/api/roles/${id}`, { credentials: "same-origin" })
-      .then((r) => r.ok ? r.json() : Promise.reject())
-      .then((json: { data: { code: string; name: string; description: string | null; permissions: string[] } }) => {
-        setRole(json.data);
-        reset({ name: json.data.name, description: json.data.description ?? "" });
+    let ignore = false;
+    Promise.resolve().then(() => { if (!ignore) setLoading(true); });
+    Promise.all([
+      fetch(`/api/roles/${id}`, { credentials: "same-origin" }).then((r) => r.ok ? r.json() : Promise.reject()),
+      fetch("/api/permissions", { credentials: "same-origin" }).then((r) => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      fetch("/api/me", { credentials: "same-origin" }).then((r) => r.ok ? r.json() : null).catch(() => null),
+    ])
+      .then(([roleJson, permJson, me]: [{ data: { code: string; name: string; description: string | null; permissions: string[] } }, { data: PermGroup[] }, { permissions?: string[] } | null]) => {
+        if (ignore) return;
+        const data = roleJson.data;
+        setRole(data);
+        reset({ name: data.name, description: data.description ?? "" });
+        setSelected(new Set(data.permissions));
+        setCatalog(permJson.data ?? []);
+        setMyPerms(new Set(me?.permissions ?? []));
       })
-      .catch(() => toast.error("Gagal memuat role."))
-      .finally(() => setLoading(false));
+      .catch(() => { if (!ignore) toast.error("Gagal memuat role."); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -44,14 +69,34 @@ export default function EditRolePage() {
       body: JSON.stringify(values), credentials: "same-origin",
     });
     if (res.ok) toast.success("Role diperbarui.");
-    else toast.error("Gagal memperbarui.");
+    else toast.error(await readError(res));
+  }
+
+  function toggle(code: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code); else next.add(code);
+      return next;
+    });
+  }
+
+  async function savePermissions() {
+    setSavingPerms(true);
+    try {
+      const res = await fetch(`/api/roles/${id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissionCodes: [...selected] }), credentials: "same-origin",
+      });
+      if (res.ok) { toast.success("Permission role diperbarui."); }
+      else toast.error(await readError(res));
+    } catch { toast.error("Koneksi terganggu."); } finally { setSavingPerms(false); }
   }
 
   if (loading) return <div className="flex justify-center py-12"><Spinner size={28} /></div>;
   if (!role) return <p className="text-sm text-zinc-500">Role tidak ditemukan.</p>;
 
   return (
-    <div className="max-w-lg space-y-6">
+    <div className="max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/roles"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <h1 className="text-2xl font-semibold">Edit: <code className="text-base">{role.code}</code></h1>
@@ -59,19 +104,54 @@ export default function EditRolePage() {
       <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="space-y-4">
         <FormField name="name" label="Nama" register={register("name")} error={errors.name?.message} />
         <FormField name="description" label="Deskripsi" register={register("description")} error={errors.description?.message} />
-        <Button type="submit" loading={isSubmitting}>Simpan</Button>
+        <Button type="submit" loading={isSubmitting}>Simpan Profil</Button>
       </form>
-      <div>
-        <h2 className="text-lg font-medium mb-2">Permissions ({role.permissions.length})</h2>
-        <div className="max-h-60 overflow-y-auto rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-          {role.permissions.length === 0 ? (
-            <p className="text-sm text-zinc-400">Belum ada permission.</p>
-          ) : (
-            <ul className="space-y-1 text-xs font-mono">
-              {role.permissions.map((p) => <li key={p} className="text-zinc-600 dark:text-zinc-400">{p}</li>)}
-            </ul>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-medium">Permission ({selected.size})</h2>
+          {catalog.length > 0 && (
+            <Button size="sm" onClick={savePermissions} loading={savingPerms}>Simpan Permission</Button>
           )}
         </div>
+
+        {catalog.length === 0 ? (
+          <div className="rounded-lg border border-zinc-200 p-3 text-sm text-zinc-400 dark:border-zinc-800">
+            Katalog permission tidak tersedia (butuh izin <code>core.permissions.read</code>). Role ini memiliki {role.permissions.length} permission.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {catalog.map((group) => (
+              <div key={group.module} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+                <p className="mb-2 text-xs font-semibold uppercase text-zinc-500">{group.module}</p>
+                <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                  {group.permissions.map((p) => {
+                    const canGrant = myPerms.has(p.code) || selected.has(p.code);
+                    return (
+                      <label key={p.code} className={`flex items-start gap-2 text-xs ${canGrant ? "" : "opacity-40"}`}>
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={selected.has(p.code)}
+                          disabled={!canGrant}
+                          onChange={() => toggle(p.code)}
+                        />
+                        <span>
+                          <code className="font-mono">{p.code}</code>
+                          {p.description && <span className="text-zinc-400"> — {p.description}</span>}
+                          {!canGrant && <span className="text-zinc-400"> (tidak dapat memberi)</span>}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-zinc-400">
+              Hanya permission yang Anda miliki yang dapat diberikan (pemegang <code>owner</code>/<code>superadmin</code> memiliki semuanya).
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -125,6 +125,7 @@ export const navigationSections: NavSection[] = [
     title: "Inventori",
     items: [
       { label: "Produk", href: "/products", icon: Package, permission: "inventory.products.read" },
+      { label: "Kategori Produk", href: "/product-categories", icon: Package, permission: "inventory.product_categories.read" },
       { label: "Gudang", href: "/warehouses", icon: Warehouse, permission: "inventory.warehouses.read" },
       { label: "Dokumen Stok", href: "/stock-documents", icon: ClipboardList, permission: "inventory.documents.read" },
       { label: "Laporan Persediaan", href: "/inventory-reports", icon: BarChart3, permission: "inventory.stock.read" },
